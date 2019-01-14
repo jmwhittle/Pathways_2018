@@ -185,6 +185,7 @@ gen_data$HIGH_SCHOOL_GPA <- ifelse(gen_data$HIGH_SCHOOL_GPA > 3, "AB",
                                        ifelse(gen_data$HIGH_SCHOOL_GPA > 1, "CD", 
                                               ifelse(gen_data$HIGH_SCHOOL_GPA > 0, "DF", 
                                                      ifelse(is.na(gen_data$HIGH_SCHOOL_GPA) == T, "NA", "F")))))
+gen_data$HIGH_SCHOOL_GPA[is.na(gen_data$HIGH_SCHOOL_GPA) == T] <- "NA"
 
 
 # creating high risk ethnicity group dummy (Pacific Islander and Native American are known to retain at significantly lower levels than other groups)
@@ -275,11 +276,10 @@ gen_data_pass <- gen_data %>%
   filter(cte_nobs == 0) %>%
   filter(wd == 0) %>%
   dplyr::select(passed, 
+                bs_deg,
                 AGE_ON_FIRST_DAY,
                 male, 
-                hr_rem, 
-                bs_deg, 
-                PROGRAM_CODE,
+                ETHNICITY, 
                 COLLEGE_READY_ENGLISH,
                 COLLEGE_READY_MATH,
                 HIGH_SCHOOL_GPA,
@@ -288,23 +288,49 @@ gen_data_pass <- gen_data %>%
                 FIRST_GENERATION_IND, 
                 EVER_CONCURRENT_IND)
 
-# BMA model selection
-bma_passed <- bic.glm(
-  bs_deg ~ AGE_ON_FIRST_DAY +
-    male + 
-    hr_rem + 
-    COLLEGE_READY_ENGLISH +
-    COLLEGE_READY_MATH + 
-    HIGH_SCHOOL_GPA +
-    TOTAL_CREDITS_EARNED + 
-    TERM_CREDITS +
-    FIRST_GENERATION_IND + 
-    EVER_CONCURRENT_IND, 
-  data = gen_data_pass)
+gen_data_pass$AGE_ON_FIRST_DAY <- scale(gen_data_pass$AGE_ON_FIRST_DAY)
+gen_data_pass$TOTAL_CREDITS_EARNED <- scale(gen_data_pass$TOTAL_CREDITS_EARNED)
+gen_data_pass$TERM_CREDITS <- scale(gen_data_pass$TERM_CREDITS)
 
+# STEP 1: select propensity score models with BMA
+# BMA model selection
+bma_bus <- bic.glm(bs_deg ~ 
+                     AGE_ON_FIRST_DAY + 
+                     TERM_CREDITS + 
+                     TOTAL_CREDITS_EARNED + 
+                     male + 
+                     ETHNICITY + 
+                     COLLEGE_READY_ENGLISH + 
+                     COLLEGE_READY_MATH + 
+                     FIRST_GENERATION_IND +
+                     EVER_CONCURRENT_IND + 
+                     HIGH_SCHOOL_GPA,
+                   data = gen_data_pass, glm.family = "binomial")
+
+# STEP 2: model top 5 with MCMClogit: Best  5  models (cumulative posterior probability =  0.8409)
+# model 1: AGE_ON_FIRST_DAY, male (post prob 0.352)
+gen_ps_1 <- MCMClogit(bs_deg ~ AGE_ON_FIRST_DAY + male, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+
+# model 2: male (post prob 0.320)
+gen_ps_2 <- MCMClogit(bs_deg ~ male, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+
+# model 3: male, HIGH_SCHOOL_GPA (post prob 0.070)
+gen_ps_3 <- MCMClogit(bs_deg ~ male + HIGH_SCHOOL_GPA, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+
+# model 4: male, TERM_CREDITS (post prob 0.054)
+gen_ps_4 <- MCMClogit(bs_deg ~ male + TERM_CREDITS, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+
+# model 5: AGE_ON_FIRST_DAY, male, HIGH_SCHOOL_GPA (post prob 0.045)
+gen_ps_5 <- MCMClogit(bs_deg ~ AGE_ON_FIRST_DAY + male + HIGH_SCHOOL_GPA, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+
+# STEP 3: sample from all five models and wieght outcomes based on post prob to get final PS model
+
+# STEP 4: match based on model from STEP 3
+
+# STEP 5: estimate the treatment effect
 # MCMC ps score estimations
 
-MCMCregress()
+gen_ps_model <- MCMClogit()
 
 # pathways passing evaluation
 

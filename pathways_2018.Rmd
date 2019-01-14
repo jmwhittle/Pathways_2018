@@ -1,0 +1,321 @@
+---
+title: "Pathways Implementation Study"
+author: "Jason Whittle"
+date: "1/2/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
+```
+
+# Study Design
+
+Two studies will be conducted:
+
+4 years of first year business students prior to pathways will be used as the control group.
+
+- This will compare business students to business students to eliminate major self-selection.
+- I am not convinced that first term business majors are the same as a first year biology or sociology major.
+- Year cannot be controlled for in this model since it would be collinear with the causal variable.
+- This model will not use any additional matching but will make sure there aren’t systematic differences in demographics or academic background.
+        
+        
+One-year model of all students enrolled in Fall 2018.
+
+- HARD FILTERS:
+
+>> Excluded groups will be:
+
+>> 1. CTE
+2. SAT 
+3. Students with GS declared major.
+4. CSIS will be allowed despite being organized at a CTE program since it is in the Bus school
+
+- PSM Model:
+
+ >> 1. Former concurrent (possibility of breaking this variable down by CE courses taken)
+ 2. HS GPA factor
+ 3. Apt-test score factors
+ 4. eth *X* gen *X* age
+ 5. (census some college +/census pop) *X* census median income *X* (renters/pop)-1
+ 6. first generation
+
+Outcomes for these models to measure:
+
+>>  1. Fall-Spring Retention
+        - (model 1: Bayesian logistic regression | model 2: MLM logistic regression)
+    2. GPA (Fall term)
+        - (model 1: BMA/Bayesian linear regression | model 2: MLM linear regression)
+    3. Passing (Fall term)
+    4. Term Credits (Fall term)
+
+```{r}
+library(readxl)
+library(tidyverse); theme_set(theme_minimal())
+```
+
+```{r}
+# old bus_data with Marie sql mistakes
+# bus_data <- read_xlsx("IRR-768 2 Business Pathways Datasets.xlsx", sheet = "Business Pathway") # 4 year study
+# new bus_data
+bus_data <- read.csv("IRR_768_bus_data.csv")
+
+# old gen_data with Marie sql mistakes
+# gen_data <- read_xlsx("IRR-768 2 Business Pathways Datasets.xlsx", sheet = "non-general studies") # Fall 2018 comparison study
+gen_data <- read.csv("IRR_768_gen_data.csv")
+```
+
+# Four year study
+
+```{r}
+# removing programs not used for pathways
+bus_data <- bus_data %>% filter(PROGRAM_CODE != "CHEF-AAS" & PROGRAM_CODE != "CSIS-AS" & PROGRAM_CODE != "CSIS-AAS")
+
+# fixing known data warehouse issues
+bus_data$TOTAL_CREDITS_EARNED[is.na(bus_data$TOTAL_CREDITS_EARNED) == T] <- 0
+bus_data$TERM_CREDITS[is.na(bus_data$TERM_CREDITS) == T] <- 0
+bus_data$male <- ifelse(bus_data$GENDER_CODE == "M", 1, 0)
+bus_data$FIRST_GENERATION_IND <- ifelse(bus_data$FIRST_GENERATION_IND == "Y", 1, 0)
+bus_data$FALL_SPRING_RETENTION <- ifelse(bus_data$FALL_SPRING_RETENTION == "Y", 1, 0)
+bus_data$FALL_SPRING_RETENTION[is.na(bus_data$FALL_SPRING_RETENTION) == T] <- 0
+bus_data$EVER_CONCURRENT_IND <- ifelse(bus_data$EVER_CONCURRENT_IND == "Y", 1, 0)
+
+bus_data$HIGH_SCHOOL_GPA <- ifelse(bus_data$HIGH_SCHOOL_GPA > 3, "AB",
+                                ifelse(bus_data$HIGH_SCHOOL_GPA > 2, "BC", 
+                                       ifelse(bus_data$HIGH_SCHOOL_GPA > 1, "CD", 
+                                              ifelse(bus_data$HIGH_SCHOOL_GPA > 0, "DF", 
+                                                     ifelse(is.na(bus_data$HIGH_SCHOOL_GPA) == T, "NA", "F")))))
+
+# creating high risk ethnicity group dummy (Pacific Islander and Native American are known to retain at significantly lower levels than other groups)
+bus_data$hr_rem <- ifelse(bus_data$ETHNICITY_CODE == "P" | bus_data$ETHNICITY_CODE == "I", 1, 0)
+
+# imputing and adjusting problem data
+## placement scores (max score is 120 so all values above this are incorrect)
+bus_data$CPT_ARITHMEIC[bus_data$CPT_ARITHMEIC > 120] <- mean(bus_data$CPT_ARITHMEIC)
+bus_data$CPT_COLLEGE_MATH[bus_data$CPT_COLLEGE_MATH > 120] <- mean(bus_data$CPT_COLLEGE_MATH)
+bus_data$CPT_ELEM_ALGEBRA[bus_data$CPT_ELEM_ALGEBRA > 120] <- mean(bus_data$CPT_ELEM_ALGEBRA)
+bus_data$CPT_READING[bus_data$CPT_READING > 120] <- mean(bus_data$CPT_READING)
+
+## CB data
+bus_data$CB_MEDIAN_INCOME[bus_data$CB_MEDIAN_INCOME < 0] <- mean(bus_data$CB_MEDIAN_INCOME)
+bus_data$CB_MEDIAN_INCOME[is.na(bus_data$CB_MEDIAN_INCOME) == T] <- mean(bus_data$CB_MEDIAN_INCOME, na.rm = T)
+bus_data$CB_ABOVE_SOME_COLLEGE[is.na(bus_data$CB_ABOVE_SOME_COLLEGE) == T] <- mean(bus_data$CB_ABOVE_SOME_COLLEGE, na.rm = T)
+bus_data$CB_POPULATION[is.na(bus_data$CB_POPULATION) == T] <- mean(bus_data$CB_POPULATION, na.rm = T)
+bus_data$CB_RENTER[is.na(bus_data$CB_RENTER) == T] <- mean(bus_data$CB_RENTER, na.rm = T)
+
+# withdrew from all courses in a term
+## will have to interact both of these terms
+bus_data$wd <- ifelse(is.na(bus_data$TERM_GPA) == T, 1, 0)
+bus_data$TERM_GPA[is.na(bus_data$TERM_GPA) == T] <- 0
+
+# 201840 dummy for PSM
+bus_data$treated <- ifelse(bus_data$TERM_CODE == 201840, 1, 0)
+
+# summary(bus_data)
+# names(bus_data)
+```
+
+### Plots for outcome variables
+
+```{r}
+# Term GPA
+bus_data %>% ggplot() + 
+  geom_density(aes(TERM_GPA, color = as.factor(TERM_CODE))) 
+```
+
+```{r}
+# Term Credits
+bus_data %>% ggplot() + 
+  geom_density(aes(TERM_CREDITS, color = as.factor(TERM_CODE))) 
+```
+
+```{r}
+# Passed fall semeseter
+```
+
+```{r}
+# retained F-S semester
+```
+
+
+
+```{r}
+library(lme4)
+library(BMA)
+library(MCMCpack)
+```
+
+```{r}
+# term gpa outcome
+# MCMCregress(TERM_GPA
+#   data = bus_data)
+
+
+# retention outcome
+
+
+
+```
+
+
+# Fall study
+
+```{r}
+# excluding some majors
+gen_data <- gen_data %>% filter(PROGRAM_NAME != "Unknown" |
+                                  PROGRAM_NAME != "General Studies - Undecide: PI" |
+                                  PROGRAM_NAME != "General Studies: AA" |
+                                  PROGRAM_NAME != "General Studies: AS" |
+                                  PROGRAM_NAME != "General Studies: Transfer")
+
+# fixing known data warehouse issues
+gen_data$TOTAL_CREDITS_EARNED[is.na(gen_data$TOTAL_CREDITS_EARNED) == T] <- 0
+gen_data$TERM_CREDITS[is.na(gen_data$TERM_CREDITS) == T] <- 0
+gen_data$male <- ifelse(gen_data$GENDER_CODE == "M", 1, 0)
+gen_data$FIRST_GENERATION_IND <- ifelse(gen_data$FIRST_GENERATION_IND == "Y", 1, 0)
+gen_data$FALL_SPRING_RETENTION <- ifelse(gen_data$FALL_SPRING_RETENTION == "Y", 1, 0)
+gen_data$FALL_SPRING_RETENTION[is.na(gen_data$FALL_SPRING_RETENTION) == T] <- 0
+gen_data$EVER_CONCURRENT_IND <- ifelse(gen_data$EVER_CONCURRENT_IND == "Y", 1, 0)
+
+gen_data$HIGH_SCHOOL_GPA <- ifelse(gen_data$HIGH_SCHOOL_GPA > 3, "AB",
+                                ifelse(gen_data$HIGH_SCHOOL_GPA > 2, "BC", 
+                                       ifelse(gen_data$HIGH_SCHOOL_GPA > 1, "CD", 
+                                              ifelse(gen_data$HIGH_SCHOOL_GPA > 0, "DF", 
+                                                     ifelse(is.na(gen_data$HIGH_SCHOOL_GPA) == T, "NA", "F")))))
+
+
+# creating high risk ethnicity group dummy (Pacific Islander and Native American are known to retain at significantly lower levels than other groups)
+gen_data$hr_rem <- ifelse(gen_data$ETHNICITY_CODE == "P" | gen_data$ETHNICITY_CODE == "I", 1, 0)
+
+# imputing and adjusting problem data
+## placement scores (max score is 120 so all values above this are incorrect)
+gen_data$CPT_ARITHMEIC[gen_data$CPT_ARITHMEIC > 120] <- mean(gen_data$CPT_ARITHMEIC)
+gen_data$CPT_COLLEGE_MATH[gen_data$CPT_COLLEGE_MATH > 120] <- mean(gen_data$CPT_COLLEGE_MATH)
+gen_data$CPT_ELEM_ALGEBRA[gen_data$CPT_ELEM_ALGEBRA > 120] <- mean(gen_data$CPT_ELEM_ALGEBRA)
+gen_data$CPT_READING[gen_data$CPT_READING > 120] <- mean(gen_data$CPT_READING)
+
+## CB data
+gen_data$CB_MEDIAN_INCOME[gen_data$CB_MEDIAN_INCOME < 0] <- mean(gen_data$CB_MEDIAN_INCOME)
+gen_data$CB_MEDIAN_INCOME[is.na(gen_data$CB_MEDIAN_INCOME) == T] <- mean(gen_data$CB_MEDIAN_INCOME, na.rm = T)
+gen_data$CB_ABOVE_SOME_COLLEGE[is.na(gen_data$CB_ABOVE_SOME_COLLEGE) == T] <- mean(gen_data$CB_ABOVE_SOME_COLLEGE, na.rm = T)
+gen_data$CB_POPULATION[is.na(gen_data$CB_POPULATION) == T] <- mean(gen_data$CB_POPULATION, na.rm = T)
+gen_data$CB_RENTER[is.na(gen_data$CB_RENTER) == T] <- mean(gen_data$CB_RENTER, na.rm = T)
+
+# withdrew from all courses in a term
+## will have to interact both of these terms
+gen_data$wd <- ifelse(is.na(gen_data$TERM_GPA) == T, 1, 0)
+gen_data$TERM_GPA[is.na(gen_data$TERM_GPA) == T] <- 0
+
+# business program dummy variable
+gen_data$bs_deg <- ifelse(gen_data$COLLEGE_CODE == "BU", 1, 0) # this will have CSIS major in it
+
+# Removing BU programs that were not included in pathways from the treatment group indicator
+gen_data$bs_deg[gen_data$COLLEGE_CODE == "BU"] <- 1
+gen_data$bs_deg[is.na(gen_data$bs_deg) == T] <- 0
+gen_data$bs_deg[gen_data$PROGRAM_NAME == "CIS/Comp Prog & Design: AAS" |
+           gen_data$PROGRAM_NAME == "Computer Sci & Info Systems:AS" |
+           gen_data$PROGRAM_NAME == "Computer Sci &Info Systems:AAS" |
+           gen_data$PROGRAM_NAME == "Network Systems: AAS" |
+           gen_data$PROGRAM_NAME == "Culinary Arts: AAS"] <- 0
+
+# pulling out all other CTE programs, most BU programs are CTE and will not be pulled out
+gen_data$cte <- ifelse(gen_data$CTE_IND == "Y", 1, 0) # all CTE programs
+gen_data$cte_nobs <- gen_data$cte # CTE program that will exclude BU programs
+gen_data$cte_nobs[gen_data$PROGRAM_NAME =="Hospitality Management: AAS" |
+    gen_data$PROGRAM_NAME =="Finance & Credit: AAS" |
+    gen_data$PROGRAM_NAME =="Marketing Management: AAS" |  
+    gen_data$PROGRAM_NAME =="Culinary Arts: AAS" |
+    gen_data$PROGRAM_NAME =="Business Administration: AAS" |
+    gen_data$PROGRAM_NAME =="Paralegal Studies: AAS" |
+    gen_data$PROGRAM_NAME =="Network Systems: AAS"] <- 0
+
+# summary(gen_data)
+```
+
+### Raw outcome plots
+
+```{r}
+# Term GPA
+gen_data %>%
+  filter(cte_nobs == 0) %>%
+  ggplot() + 
+  geom_density(aes(TERM_GPA, color = as.factor(bs_deg))) 
+```
+
+```{r}
+# Term GPA
+gen_data %>% ggplot() + 
+  geom_density(aes(TERM_CREDITS, color = as.factor(bs_deg))) 
+```
+
+### models
+
+```{r}
+gen_data_gpa
+
+lmer()
+
+rm(gen_data_gpa)
+```
+
+```{r}
+gen_data_credit
+
+lmer()
+
+rm(gen_data_credit)
+```
+
+```{r}
+gen_data_pass <- gen_data %>% 
+  mutate(passed = TERM_GPA >= 2) %>%
+  filter(cte_nobs == 0) %>%
+  filter(wd == 0) %>%
+  dplyr::select(passed, 
+                AGE_ON_FIRST_DAY,
+                male, 
+                hr_rem, 
+                bs_deg, 
+                PROGRAM_CODE,
+                COLLEGE_READY_ENGLISH,
+                COLLEGE_READY_MATH,
+                HIGH_SCHOOL_GPA,
+                TOTAL_CREDITS_EARNED,
+                TERM_CREDITS,
+                FIRST_GENERATION_IND, 
+                EVER_CONCURRENT_IND)
+
+# BMA model selection
+bma_passed <- bic.glm(
+  bs_deg ~ AGE_ON_FIRST_DAY +
+    male + 
+    hr_rem + 
+    COLLEGE_READY_ENGLISH +
+    COLLEGE_READY_MATH + 
+    HIGH_SCHOOL_GPA +
+    TOTAL_CREDITS_EARNED + 
+    TERM_CREDITS +
+    FIRST_GENERATION_IND + 
+    EVER_CONCURRENT_IND, 
+  data = gen_data_pass)
+
+# MCMC ps score estimations
+
+MCMCregress()
+
+# pathways passing evaluation
+
+rm(gen_data_pass)
+```
+
+```{r}
+gen_data_ret
+
+lmer()
+
+rm(gen_data_ret)
+```
+

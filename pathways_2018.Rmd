@@ -140,8 +140,6 @@ bus_data %>% ggplot() +
 # retained F-S semester
 ```
 
-
-
 ```{r}
 library(lme4)
 library(BMA)
@@ -180,12 +178,26 @@ gen_data$FALL_SPRING_RETENTION <- ifelse(gen_data$FALL_SPRING_RETENTION == "Y", 
 gen_data$FALL_SPRING_RETENTION[is.na(gen_data$FALL_SPRING_RETENTION) == T] <- 0
 gen_data$EVER_CONCURRENT_IND <- ifelse(gen_data$EVER_CONCURRENT_IND == "Y", 1, 0)
 
-gen_data$HIGH_SCHOOL_GPA <- ifelse(gen_data$HIGH_SCHOOL_GPA > 3, "AB",
-                                ifelse(gen_data$HIGH_SCHOOL_GPA > 2, "BC", 
-                                       ifelse(gen_data$HIGH_SCHOOL_GPA > 1, "CD", 
-                                              ifelse(gen_data$HIGH_SCHOOL_GPA > 0, "DF", 
-                                                     ifelse(is.na(gen_data$HIGH_SCHOOL_GPA) == T, "NA", "F")))))
-gen_data$HIGH_SCHOOL_GPA[is.na(gen_data$HIGH_SCHOOL_GPA) == T] <- "NA"
+# gen_data$HIGH_SCHOOL_GPA <- ifelse(gen_data$HIGH_SCHOOL_GPA > 3, "AB",
+#                                 ifelse(gen_data$HIGH_SCHOOL_GPA > 2, "BC", 
+#                                        ifelse(gen_data$HIGH_SCHOOL_GPA > 1, "CD", 
+#                                               ifelse(gen_data$HIGH_SCHOOL_GPA > 0, "DF", 
+#                                                      ifelse(is.na(gen_data$HIGH_SCHOOL_GPA) == T, "NO_GRADE", "F")))))
+# gen_data$HIGH_SCHOOL_GPA[is.na(gen_data$HIGH_SCHOOL_GPA) == T] <- "NO_GRADE"
+
+gen_data$HIGH_SCHOOL_GPA_AB <- ifelse(gen_data$HIGH_SCHOOL_GPA > 3, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_AB[is.na(gen_data$HIGH_SCHOOL_GPA_AB) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_BC <- ifelse(gen_data$HIGH_SCHOOL_GPA > 2 & gen_data$HIGH_SCHOOL_GPA <= 3, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_BC[is.na(gen_data$HIGH_SCHOOL_GPA_BC) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_CD <- ifelse(gen_data$HIGH_SCHOOL_GPA > 1 & gen_data$HIGH_SCHOOL_GPA <= 2, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_CD[is.na(gen_data$HIGH_SCHOOL_GPA_CD) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_DF <- ifelse(gen_data$HIGH_SCHOOL_GPA > 0 & gen_data$HIGH_SCHOOL_GPA <= 1, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_DF[is.na(gen_data$HIGH_SCHOOL_GPA_DF) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_NA <- ifelse(is.na(gen_data$HIGH_SCHOOL_GPA) == T, 1, 0)
 
 
 # creating high risk ethnicity group dummy (Pacific Islander and Native American are known to retain at significantly lower levels than other groups)
@@ -254,13 +266,7 @@ gen_data %>% ggplot() +
 
 ### models
 
-```{r}
-gen_data_gpa
 
-lmer()
-
-rm(gen_data_gpa)
-```
 
 ```{r}
 gen_data_credit
@@ -275,66 +281,120 @@ gen_data_pass <- gen_data %>%
   mutate(passed = TERM_GPA >= 2) %>%
   filter(cte_nobs == 0) %>%
   filter(wd == 0) %>%
-  dplyr::select(passed, 
+  dplyr::select(passed,
+                TERM_GPA,
                 bs_deg,
                 AGE_ON_FIRST_DAY,
                 male, 
-                ETHNICITY, 
+                hr_rem, 
                 COLLEGE_READY_ENGLISH,
                 COLLEGE_READY_MATH,
-                HIGH_SCHOOL_GPA,
                 TOTAL_CREDITS_EARNED,
                 TERM_CREDITS,
                 FIRST_GENERATION_IND, 
-                EVER_CONCURRENT_IND)
+                EVER_CONCURRENT_IND,
+                HIGH_SCHOOL_GPA_AB,
+                HIGH_SCHOOL_GPA_BC,
+                HIGH_SCHOOL_GPA_CD,
+                HIGH_SCHOOL_GPA_DF)
 
 gen_data_pass$AGE_ON_FIRST_DAY <- scale(gen_data_pass$AGE_ON_FIRST_DAY)
 gen_data_pass$TOTAL_CREDITS_EARNED <- scale(gen_data_pass$TOTAL_CREDITS_EARNED)
 gen_data_pass$TERM_CREDITS <- scale(gen_data_pass$TERM_CREDITS)
+gen_data_pass$COLLEGE_READY_ENGLISH <- ifelse(gen_data_pass$COLLEGE_READY_ENGLISH == "Y", 1, 0)
+gen_data_pass$COLLEGE_READY_MATH <- ifelse(gen_data_pass$COLLEGE_READY_MATH == "Y", 1,  0)
+
+covar_all <- names(gen_data_pass)
+covar <- covar_all[-c(1, 2, 3)]
+
+fmla <- as.formula(bs_deg ~ 
+                     AGE_ON_FIRST_DAY +
+                     male + 
+                     hr_rem + 
+                     COLLEGE_READY_ENGLISH +
+                     COLLEGE_READY_MATH +  
+                     TOTAL_CREDITS_EARNED + 
+                     TERM_CREDITS + 
+                     FIRST_GENERATION_IND +
+                     EVER_CONCURRENT_IND +
+                     HIGH_SCHOOL_GPA_AB + 
+                     HIGH_SCHOOL_GPA_BC +
+                     HIGH_SCHOOL_GPA_CD + 
+                     HIGH_SCHOOL_GPA_DF)
 
 # STEP 1: select propensity score models with BMA
+# Adapted from Cassie (Jianshen) Chen and David Kaplan 2014 r scrpit and paper
+# "Bayesian Model Averaging for Propensity Score Analysis"
 # BMA model selection
-bma_bus <- bic.glm(bs_deg ~ 
-                     AGE_ON_FIRST_DAY + 
-                     TERM_CREDITS + 
-                     TOTAL_CREDITS_EARNED + 
-                     male + 
-                     ETHNICITY + 
-                     COLLEGE_READY_ENGLISH + 
-                     COLLEGE_READY_MATH + 
-                     FIRST_GENERATION_IND +
-                     EVER_CONCURRENT_IND + 
-                     HIGH_SCHOOL_GPA,
-                   data = gen_data_pass, glm.family = "binomial")
+bma_bus <- bic.glm(fmla, data = gen_data_pass, glm.family = "binomial")
+
+bma_bus$postprob # posterior predictive probability of each model
+cumsum(bma_bus$postprob) # cumulative posterior predivtive probabilities
+nmodel <- length(bma_bus$postprob) 
+variables <- bma_bus$which # which variables were selected by models for BMA
 
 # STEP 2: model top 5 with MCMClogit: Best  5  models (cumulative posterior probability =  0.8409)
-# model 1: AGE_ON_FIRST_DAY, male (post prob 0.352)
-gen_ps_1 <- MCMClogit(bs_deg ~ AGE_ON_FIRST_DAY + male, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+set.seed(1983)
+model <- rep(list(1), nmodel)
+gmodel <- rep(list(1), nmodel)
+bps_all <- rep(list(1), nmodel)
+fmla_models <- rep(list(1, nmodel)) # object to hold all the models used for MCMClogit estimation
 
-# model 2: male (post prob 0.320)
-gen_ps_2 <- MCMClogit(bs_deg ~ male, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+# for loop for running MCMC models based on BMA output
+for (i in 1:nmodel)
+{ 
+  fmla <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  fmla_models[[i]] <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  model[[i]] <- MCMClogit(fmla, data=gen_data_pass, glm.family="binomial",mcmc=40000,thin=40,burnin=5000)
+  gmodel[[i]] <- glm(fmla, data=gen_data_pass, family="binomial");
+  beta=model[[i]]                #Posterior sample of the PS model parameters; length= #of iterations
+  mat=model.matrix(gmodel[[i]])  #create a design matrix of covariates, length= # of students
+  ps_BPSA1 <- matrix(rep(0,nrow(model[[i]])*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+  
+  for(j in 1:nrow(beta)) # jth simulated set of beta => one set of ps
+  {
+    temp=mat%*%beta[j,]    
+    ps_BPSA1[,j] <- exp(temp)/(1+exp(temp))
+  }
+  bps_all[[i]] <- ps_BPSA1 ## save the posterior distribution of ps for each of the selected models
+}
 
-# model 3: male, HIGH_SCHOOL_GPA (post prob 0.070)
-gen_ps_3 <- MCMClogit(bs_deg ~ male + HIGH_SCHOOL_GPA, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+# STEP 3: Sampling from all models posterior distributions from the BMA to obtain the weighted model posterior distribution
 
-# model 4: male, TERM_CREDITS (post prob 0.054)
-gen_ps_4 <- MCMClogit(bs_deg ~ male + TERM_CREDITS, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+bma_ps2 <- matrix(rep(0,nrow(beta)*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+model_label <- 1:nmodel
 
-# model 5: AGE_ON_FIRST_DAY, male, HIGH_SCHOOL_GPA (post prob 0.045)
-gen_ps_5 <- MCMClogit(bs_deg ~ AGE_ON_FIRST_DAY + male + HIGH_SCHOOL_GPA, data = gen_data_pass, seed = 1983, burin = 1000, mcmc = 10000)
+# sample weigths 
+post_prob <- bma_bus$postprob[1:nmodel]/sum(bma_bus$postprob[1:nmodel])
 
-# STEP 3: sample from all five models and wieght outcomes based on post prob to get final PS model
+for (k in 1:nrow(beta))
+{
+  bma_ps2[,k] <- bps_all[[sample(model_label,1,prob=post_prob)]][,k]
+}
 
 # STEP 4: match based on model from STEP 3
 
-# STEP 5: estimate the treatment effect
-# MCMC ps score estimations
+#### Optimal Matching
+# used Matching instead of optmatch library
+library(Matching)
 
-gen_ps_model <- MCMClogit()
+Y <- gen_data_pass$passed
+Tr <- gen_data_pass$bs_deg
+
+
+optm1=cbind(rep(0,nrow(beta)),rep(0,nrow(beta)))
+for(i in 1:nrow(beta))
+{
+  test=Match(Y=Y, Tr=Tr, X=bma_ps2[,i], ties=F)
+  optm1[i,] <- c(test$est, test$se)
+}
+
+# STEP 5: estimate the treatment effect
 
 # pathways passing evaluation
 
-rm(gen_data_pass)
+
+
 ```
 
 ```{r}

@@ -1,0 +1,194 @@
+---
+title: "Pathways Pilot Study"
+author: "Jason Whittle"
+date: "2/4/2019"
+header-includes:
+    - \usepackage{fancyhdr}
+    - \pagestyle{fancy}
+    - \rhead{\includegraphics[width=2cm,height=2cm]{logo.png}}
+    - \chead{Jason Whittle}
+    - \lhead{Pathways Pilot Study}
+output:
+  pdf_document:
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
+```
+
+```{r, cache=T}
+source('~/Documents/Pathways_2018/pathways_bus_study.R')
+```
+
+```{r, cache=T}
+source('~/Documents/Pathways_2018/pathways_gen_study.R')
+```
+
+
+```{r}
+library(tidyverse); theme_set(theme_minimal())
+```
+
+# Pathways Pilot Results Summary
+
+# Pathways Background
+
+# Evaluation methods
+
+## Data
+
+## Buisness student comparison
+
+### Credit momentum
+
+
+```{r, scale = 75}
+ df_mo %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  labs(title ="Pathways Estimated Treatment Effect on Credit Momentum", 
+       x = "",
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0) + 
+  geom_vline(xintercept = bus_mo_sum$quantiles[13,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_mo_sum$quantiles[13,5], linetype = "dashed")
+```
+
+### Program momentum
+
+```{r}
+df_pro_gate %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  labs(title ="Pathways Estimated Treatment Effect on Program Momentum",
+       x = "", 
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0) + 
+  geom_vline(xintercept = bus_gate_model_sum$quantiles[13,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_gate_model_sum$quantiles[13,5], linetype = "dashed")
+```
+
+### Gateway momentum
+
+```{r}
+ df_ql %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  labs(title ="Pathways Estimated Treatment Effect on QL gateway Momentum",
+       x = "",
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0) + 
+  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,5], linetype = "dashed")
+```
+
+```{r}
+df_engl %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  labs(title ="Pathways Estimated Treatment Effect on ENGL gateway Momentum",
+       x = "",
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0)+ 
+  geom_vline(xintercept = bus_engl_model_sum$quantiles[13,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_engl_model_sum$quantiles[13,5], linetype = "dashed")
+```
+
+### Passing GPA
+
+```{r}
+ df_pass %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  labs(title ="Pathways Estimated Treatment Effect on Passing GPA", 
+       x = "",
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0) + 
+  geom_vline(xintercept = bus_pass_sum$quantiles[14,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_pass_sum$quantiles[14,5], linetype = "dashed")
+```
+
+### Fall to Spring Retention
+
+```{r}
+df_ret %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  labs(title ="Pathways Estimated Treatment Effect on F-S Retention", 
+       x = "",
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0) + 
+  geom_vline(xintercept = bus_ret_sum$quantiles[14,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_ret_sum$quantiles[14,5], linetype = "dashed")
+```
+
+### Term Credits
+
+```{r}
+df_tc %>%
+  ggplot(aes(var1)) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") +
+  labs(title ="Pathways Estimated Treatment Effect on Fall Term Credits",
+       x = "",
+       y = "Percent of Estimated Effects") + 
+  geom_vline(xintercept = 0) + 
+  geom_vline(xintercept = bus_tc_sum$quantiles[13,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_tc_sum$quantiles[13,5], linetype = "dashed")
+```
+
+## Fall semester comparison
+
+### Passing GPA
+
+```{r}
+tr_ef_passing  %>% 
+  ggplot((aes(V1))) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  geom_vline(xintercept = 0) +
+  geom_vline(xintercept = quantile(tr_ef_passing$V1, probs = .975), linetype="dotted") + 
+  geom_vline(xintercept = quantile(tr_ef_passing$V1, probs = .025), linetype="dotted") +
+  labs(x = "Estimated Treatment Effect on Passing GPA of Pathways",
+       title = "Distribution of Treatment Effect Estimates")
+```
+
+### Fall to Spring Retention
+
+```{r}
+tr_ef_ret  %>% 
+  ggplot((aes(V1))) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  geom_vline(xintercept = 0) +
+  geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .975), linetype="dotted") + 
+  geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .025), linetype="dotted") +
+  labs(x = "Estimated Treatment Effect on Fall-Spring retention of Pathways",
+       title = "Distribution of Treatment Effect Estimates")
+```
+
+
+### Term Credits
+
+```{r}
+
+tr_ef_tc  %>% 
+  ggplot((aes(V1))) + 
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+  geom_density(alpha = .2, fill = "#00abe1") + 
+  geom_vline(xintercept = 0) +
+  geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .975), linetype="dotted") + 
+  geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .025), linetype="dotted") +
+  labs(x = "Estimated Treatment Effect on Passing GPA of Pathways",
+       title = "Distribution of Treatment Effect Estimates")
+```
+

@@ -1,0 +1,650 @@
+library(lme4)
+library(BMA)
+library(MCMCpack)
+library(readxl)
+library(tidyverse); theme_set(theme_minimal())
+
+# old gen_data with Marie sql mistakes
+# gen_data <- read_xlsx("IRR-768 2 Business Pathways Datasets.xlsx", sheet = "non-general studies") # Fall 2018 comparison study
+# gen_data <- read.csv("IRR_768_gen_data.csv")
+gen_data <- read.csv("IRR_768_gen_data_2.csv") %>% dplyr::select(-FIRST_NAME, -LAST_NAME, -BIRTH_DATE, -ETHNICITY, -GENDER)
+
+##################################################################
+################ Fall first time student study ###################
+##################################################################
+
+# excluding some majors
+
+gen_data <- gen_data %>% filter(PROGRAM_NAME != "Unknown" |
+                                  PROGRAM_NAME != "General Studies - Undecide: PI" |
+                                  PROGRAM_NAME != "General Studies: AA" |
+                                  PROGRAM_NAME != "General Studies: AS" |
+                                  PROGRAM_NAME != "General Studies: Transfer")
+
+# fixing known data warehouse issues
+gen_data$TOTAL_CREDITS_EARNED[is.na(gen_data$TOTAL_CREDITS_EARNED) == T] <- 0
+gen_data$TERM_CREDITS[is.na(gen_data$TERM_CREDITS) == T] <- 0
+gen_data$male <- ifelse(gen_data$GENDER_CODE == "M", 1, 0)
+gen_data$FIRST_GENERATION_IND <- ifelse(gen_data$FIRST_GENERATION_IND == "Y", 1, 0)
+gen_data$FALL_SPRING_RETENTION <- ifelse(gen_data$FALL_SPRING_RETENTION == "Y", 1, 0)
+gen_data$FALL_SPRING_RETENTION[is.na(gen_data$FALL_SPRING_RETENTION) == T] <- 0
+gen_data$EVER_CONCURRENT_IND <- ifelse(gen_data$EVER_CONCURRENT_IND == "Y", 1, 0)
+
+# HIGH_SCHOOL_GPA factor variable
+gen_data$HIGH_SCHOOL_GPA_AB <- ifelse(gen_data$HIGH_SCHOOL_GPA > 3, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_AB[is.na(gen_data$HIGH_SCHOOL_GPA_AB) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_BC <- ifelse(gen_data$HIGH_SCHOOL_GPA > 2 & gen_data$HIGH_SCHOOL_GPA <= 3, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_BC[is.na(gen_data$HIGH_SCHOOL_GPA_BC) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_CD <- ifelse(gen_data$HIGH_SCHOOL_GPA > 1 & gen_data$HIGH_SCHOOL_GPA <= 2, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_CD[is.na(gen_data$HIGH_SCHOOL_GPA_CD) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_DF <- ifelse(gen_data$HIGH_SCHOOL_GPA > 0 & gen_data$HIGH_SCHOOL_GPA <= 1, 1, 0)
+gen_data$HIGH_SCHOOL_GPA_DF[is.na(gen_data$HIGH_SCHOOL_GPA_DF) == T] <- 0
+
+gen_data$HIGH_SCHOOL_GPA_NA <- ifelse(is.na(gen_data$HIGH_SCHOOL_GPA) == T, 1, 0)
+
+# creating high risk ethnicity group dummy (Pacific Islander and Native American are known to retain at significantly lower levels than other groups)
+gen_data$hr_rem <- ifelse(gen_data$ETHNICITY_CODE == "P" | gen_data$ETHNICITY_CODE == "I", 1, 0)
+
+# imputing and adjusting problem data
+## placement scores (max score is 120 so all values above this are incorrect)
+gen_data$CPT_ARITHMEIC[gen_data$CPT_ARITHMEIC > 120] <- mean(gen_data$CPT_ARITHMEIC)
+gen_data$CPT_COLLEGE_MATH[gen_data$CPT_COLLEGE_MATH > 120] <- mean(gen_data$CPT_COLLEGE_MATH)
+gen_data$CPT_ELEM_ALGEBRA[gen_data$CPT_ELEM_ALGEBRA > 120] <- mean(gen_data$CPT_ELEM_ALGEBRA)
+gen_data$CPT_READING[gen_data$CPT_READING > 120] <- mean(gen_data$CPT_READING)
+
+## CB data
+gen_data$CB_MEDIAN_INCOME[gen_data$CB_MEDIAN_INCOME < 0] <- mean(gen_data$CB_MEDIAN_INCOME)
+gen_data$CB_MEDIAN_INCOME[is.na(gen_data$CB_MEDIAN_INCOME) == T] <- mean(gen_data$CB_MEDIAN_INCOME, na.rm = T)
+gen_data$CB_ABOVE_SOME_COLLEGE[is.na(gen_data$CB_ABOVE_SOME_COLLEGE) == T] <- mean(gen_data$CB_ABOVE_SOME_COLLEGE, na.rm = T)
+gen_data$CB_POPULATION[is.na(gen_data$CB_POPULATION) == T] <- mean(gen_data$CB_POPULATION, na.rm = T)
+gen_data$CB_RENTER[is.na(gen_data$CB_RENTER) == T] <- mean(gen_data$CB_RENTER, na.rm = T)
+gen_data$CB_PCT_COL <- gen_data$CB_ABOVE_SOME_COLLEGE/gen_data$CB_POPULATION
+
+# withdrew from all courses in a term
+## will have to interact both of these terms
+gen_data$wd <- ifelse(is.na(gen_data$TERM_GPA) == T, 1, 0)
+gen_data$TERM_GPA[is.na(gen_data$TERM_GPA) == T] <- 0
+
+# business program dummy variable
+gen_data$bus_deg <- ifelse(gen_data$COLLEGE_CODE == "BU", 1, 0) # this will have CSIS major in it
+
+# Removing BU programs that were not included in pathways from the treatment group indicator
+gen_data$bus_deg[gen_data$COLLEGE_CODE == "BU"] <- 1
+gen_data$bus_deg[is.na(gen_data$bs_deg) == T] <- 0
+gen_data$bus_deg[gen_data$PROGRAM_NAME == "CIS/Comp Prog & Design: AAS" |
+                   gen_data$PROGRAM_NAME == "Computer Sci & Info Systems:AS" |
+                   gen_data$PROGRAM_NAME == "Computer Sci &Info Systems:AAS" |
+                   gen_data$PROGRAM_NAME == "Network Systems: AAS" |
+                   gen_data$PROGRAM_NAME == "Culinary Arts: AAS"] <- 0
+
+# pulling out all other CTE programs, most BU programs are CTE and will not be pulled out
+gen_data$cte <- ifelse(gen_data$CTE_IND == "Y", 1, 0) # all CTE programs
+gen_data$cte_nobs <- gen_data$cte # CTE program that will exclude BU programs
+gen_data$cte_nobs[gen_data$PROGRAM_NAME =="Hospitality Management: AAS" |
+                    gen_data$PROGRAM_NAME =="Finance & Credit: AAS" |
+                    gen_data$PROGRAM_NAME =="Marketing Management: AAS" |  
+                    gen_data$PROGRAM_NAME =="Culinary Arts: AAS" |
+                    gen_data$PROGRAM_NAME =="Business Administration: AAS" |
+                    gen_data$PROGRAM_NAME =="Paralegal Studies: AAS" |
+                    gen_data$PROGRAM_NAME =="Network Systems: AAS"] <- 0
+
+# change bs_deg to the exact student who met with advisor. 
+pathways <- read.csv("bus_path_data_warehouse.csv")
+pathways <- cbind(pathways, 1)
+names(pathways) <- c("PIDM", "GROUP", "PATHWAYS") # 229 pathways students
+
+gen_data <- gen_data %>% left_join(pathways[,c(1,3)], by = "PIDM") # 209 pathways students joined to gen_data
+
+gen_data$bs_deg <- gen_data$PATHWAYS
+gen_data$bs_deg[is.na(gen_data$bs_deg) == T] <- 0
+
+# momentum credit mark
+gen_data$credits_mo <- ifelse(gen_data$TERM_CREDITS >= 15, 1, 0)
+
+## Models
+
+### Term GPA, Passing Rate, Retention models
+gen_data_pass <- gen_data %>% 
+  mutate(passed = TERM_GPA >= 2) %>%
+  filter(cte_nobs == 0) %>%
+  filter(wd == 0) %>%
+  dplyr::select(passed,
+                TERM_GPA,
+                FALL_SPRING_RETENTION,
+                bs_deg,
+                TERM_CREDITS,
+                AGE_ON_FIRST_DAY,
+                male, 
+                hr_rem, 
+                COLLEGE_READY_ENGLISH,
+                COLLEGE_READY_MATH,
+                TOTAL_CREDITS_EARNED,
+                FIRST_GENERATION_IND, 
+                EVER_CONCURRENT_IND,
+                HIGH_SCHOOL_GPA_AB,
+                HIGH_SCHOOL_GPA_BC,
+                HIGH_SCHOOL_GPA_CD,
+                HIGH_SCHOOL_GPA_DF,
+                CB_PCT_COL,
+                CB_MEDIAN_INCOME)
+
+gen_data_pass$AGE_ON_FIRST_DAY <- scale(gen_data_pass$AGE_ON_FIRST_DAY)
+gen_data_pass$TOTAL_CREDITS_EARNED <- scale(gen_data_pass$TOTAL_CREDITS_EARNED)
+gen_data_pass$TERM_CREDITS <- scale(gen_data_pass$TERM_CREDITS)
+gen_data_pass$COLLEGE_READY_ENGLISH <- ifelse(gen_data_pass$COLLEGE_READY_ENGLISH == "Y", 1, 0)
+gen_data_pass$COLLEGE_READY_MATH <- ifelse(gen_data_pass$COLLEGE_READY_MATH == "Y", 1,  0)
+gen_data_pass$CB_MEDIAN_INCOME <- scale(gen_data_pass$CB_MEDIAN_INCOME)
+gen_data_pass$male_age <- gen_data_pass$male*gen_data_pass$AGE_ON_FIRST_DAY # interaction variable for age and gender
+gen_data_pass$col_first_gen <- gen_data_pass$CB_PCT_COL*gen_data_pass$FIRST_GENERATION_IND # interaction variable for CB percent college and first gen
+
+covar_all <- names(gen_data_pass)
+covar <- covar_all[-c(1, 2, 3, 4)] # Term credits should be left in for Passes, TERM_GPA and Retention modeling but should be removed from term_credit modeling obviously
+
+fmla_bma <- as.formula(bs_deg ~ TERM_CREDITS +
+                         AGE_ON_FIRST_DAY +
+                         male + 
+                         male_age +
+                         hr_rem + 
+                         COLLEGE_READY_ENGLISH +
+                         COLLEGE_READY_MATH +  
+                         TOTAL_CREDITS_EARNED + 
+                         FIRST_GENERATION_IND +
+                         EVER_CONCURRENT_IND +
+                         HIGH_SCHOOL_GPA_AB + 
+                         HIGH_SCHOOL_GPA_BC +
+                         HIGH_SCHOOL_GPA_CD + 
+                         HIGH_SCHOOL_GPA_DF + 
+                         CB_PCT_COL + 
+                         CB_MEDIAN_INCOME + 
+                         col_first_gen)
+
+
+# STEP 1: select propensity score models with BMA
+# Adapted from Cassie (Jianshen) Chen and David Kaplan 2014 r scrpit and paper
+# "Bayesian Model Averaging for Propensity Score Analysis"
+# BMA model selection
+bma_bus <- bic.glm(fmla_bma, data = gen_data_pass, glm.family = "binomial", occam.window = F)
+
+bma_bus$postprob # posterior predictive probability of each model
+cumsum(bma_bus$postprob) # cumulative posterior predivtive probabilities
+nmodel <- length(bma_bus$postprob) 
+variables <- bma_bus$which # which variables were selected by models for BMA
+
+# STEP 2: all BMA models with MCMClogit: Best  5  models (cumulative posterior probability =  0.6181)
+set.seed(1983)
+model <- rep(list(1), nmodel)
+gmodel <- rep(list(1), nmodel)
+bps_all <- rep(list(1), nmodel)
+fmla_models <- rep(list(1, nmodel)) # object to hold all the models used for MCMClogit estimation
+
+# for loop for running MCMC models based on BMA output
+for (i in 1:nmodel)
+{ 
+  fmla <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  fmla_models[[i]] <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  model[[i]] <- MCMClogit(fmla, data=gen_data_pass, glm.family="binomial",mcmc=40000,thin=40,burnin=5000)
+  gmodel[[i]] <- glm(fmla, data=gen_data_pass, family="binomial");
+  beta=model[[i]]                #Posterior sample of the PS model parameters; length= #of iterations
+  mat=model.matrix(gmodel[[i]])  #create a design matrix of covariates, length= # of students
+  ps_BPSA1 <- matrix(rep(0,nrow(model[[i]])*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+  
+  for(j in 1:nrow(beta)) # jth simulated set of beta => one set of ps
+  {
+    temp=mat%*%beta[j,]    
+    ps_BPSA1[,j] <- exp(temp)/(1+exp(temp))
+  }
+  bps_all[[i]] <- ps_BPSA1 ## save the posterior distribution of ps for each of the selected models
+}
+
+# STEP 3: Sampling from all models posterior distributions from the BMA to obtain the weighted model posterior distribution
+
+bma_ps2 <- matrix(rep(0,nrow(beta)*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+model_label <- 1:nmodel
+
+# sample weigths 
+post_prob <- bma_bus$postprob[1:nmodel]/sum(bma_bus$postprob[1:nmodel])
+
+for (k in 1:nrow(beta))
+{
+  bma_ps2[,k] <- bps_all[[sample(model_label,1,prob=post_prob)]][,k]
+}
+
+
+##### PASSING #######
+library(Matching)
+
+# STEP 4: match based on model from STEP 3
+
+# MatchBalance formula
+
+MB_fml <- as.formula(Tr ~ 
+                       AGE_ON_FIRST_DAY + 
+                       male + 
+                       hr_rem + 
+                       COLLEGE_READY_MATH + 
+                       COLLEGE_READY_ENGLISH + 
+                       CB_PCT_COL + 
+                       CB_MEDIAN_INCOME + 
+                       FIRST_GENERATION_IND + 
+                       TERM_CREDITS + 
+                       EVER_CONCURRENT_IND)
+
+# 
+
+#### Optimal Matching
+# used Matching instead of optmatch library
+
+Y <- gen_data_pass$passed
+Tr <- gen_data_pass$bs_deg
+m <- 5
+
+optm1=cbind(rep(0,nrow(beta)),rep(0,nrow(beta)))
+# matches=cbind(rep(0, length(bma_ps2[,1])*m*length(gen_data_pass$bs_deg[gen_data_pass$bs_deg == 1])), rep(0, length(bma_ps2[,1])*m*length(gen_data_pass$bs_deg[gen_data_pass$bs_deg == 1])))
+
+for(i in 1:nrow(beta))
+{
+  test=Match(Y=Y, Tr=Tr, X=bma_ps2[,i], ties=F, replace = T, M=m, version = "fast")
+  optm1[i,] <- c(test$est, test$se.standard)
+  #matches[,i] <- c(test$index.treated, test$index.control)
+}
+
+# View(gen_data_pass[test$index.control,])
+
+# STEP 5: estimate the treatment effect
+
+passing_te <- optm1
+tr_ef_passing <- as.data.frame(passing_te)
+
+##### TERM_GPA #######
+# STEP 4: match based on model from STEP 3
+
+#### Optimal Matching
+# used Matching instead of optmatch library
+Y <- scale(gen_data_pass$TERM_GPA) # TERM_GPA
+Tr <- gen_data_pass$bs_deg
+m <- 5
+
+optm1=cbind(rep(0,nrow(beta)),rep(0,nrow(beta)))
+for(i in 1:nrow(beta))
+{
+  test=Match(Y=Y, Tr=Tr, X=bma_ps2[,i], ties=F, replace = T, M=m, version = "fast")
+  optm1[i,] <- c(test$est, test$se.standard)
+}
+
+# STEP 5: estimate the treatment effect
+
+term_gpa_te <- optm1
+tr_ef_term_gpa <- as.data.frame(term_gpa_te)
+
+##### F-S RETENTION #######
+# STEP 4: match based on model from STEP 3
+
+#### Optimal Matching
+# used Matching instead of optmatch library
+Y <- gen_data_pass$FALL_SPRING_RETENTION # F-S RETENTION
+Tr <- gen_data_pass$bs_deg
+m <- 5
+
+optm1=cbind(rep(0,nrow(beta)),rep(0,nrow(beta)))
+for(i in 1:nrow(beta))
+{
+  test=Match(Y=Y, Tr=Tr, X=bma_ps2[,i], ties=F, replace = T, M=m, version = "fast")
+  optm1[i,] <- c(test$est, test$se.standard)
+}
+
+# STEP 5: estimate the treatment effect
+
+ret_te <- optm1
+tr_ef_ret <- as.data.frame(ret_te)
+
+# comparison plot of propensity scores between BUS and non-BUS
+ps_mean <- rowMeans(bma_ps2)
+ps_plot_data <- as.data.frame(cbind(Y, Tr, ps_mean))
+
+### Frequentist control models
+# run glm/lm for all models for baseline analysis
+freq_glm_ps <- glm(fmla_bma, data = gen_data_pass)
+
+Tr <- gen_data_pass$bs_deg
+X <- freq_glm_ps$fitted.values
+
+# passed
+Y <- gen_data_pass$passed
+freq_glm_pass <- Match(Y=Y, Tr=Tr, X=X, ties=F, replace = T)
+
+# f-s retention
+Y <- gen_data_pass$FALL_SPRING_RETENTION
+freq_glm_pass <- Match(Y=Y, Tr=Tr, X=X, ties=F, replace = T)
+
+# Credit Momentum
+
+gen_data_pass$credit_mo <- gen_data_pass$TERM_CREDITS
+
+# term credits
+
+# simple glm models
+freq_glm_pass <- glm( passed ~ bs_deg + TERM_CREDITS +
+                        AGE_ON_FIRST_DAY +
+                        male + 
+                        male_age + 
+                        hr_rem + 
+                        COLLEGE_READY_ENGLISH +
+                        COLLEGE_READY_MATH +  
+                        TOTAL_CREDITS_EARNED + 
+                        FIRST_GENERATION_IND +
+                        EVER_CONCURRENT_IND +
+                        HIGH_SCHOOL_GPA_AB + 
+                        HIGH_SCHOOL_GPA_BC +
+                        HIGH_SCHOOL_GPA_CD + 
+                        HIGH_SCHOOL_GPA_DF + 
+                        CB_PCT_COL + 
+                        CB_MEDIAN_INCOME + 
+                        col_first_gen,
+                      data = gen_data_pass, family = "binomial")
+
+freq_glm_fsr <- glm( FALL_SPRING_RETENTION ~ bs_deg + TERM_CREDITS +
+                       AGE_ON_FIRST_DAY +
+                       male + 
+                       male_age + 
+                       hr_rem + 
+                       COLLEGE_READY_ENGLISH +
+                       COLLEGE_READY_MATH +  
+                       TOTAL_CREDITS_EARNED + 
+                       FIRST_GENERATION_IND +
+                       EVER_CONCURRENT_IND +
+                       HIGH_SCHOOL_GPA_AB + 
+                       HIGH_SCHOOL_GPA_BC +
+                       HIGH_SCHOOL_GPA_CD + 
+                       HIGH_SCHOOL_GPA_DF + 
+                       CB_PCT_COL + 
+                       CB_MEDIAN_INCOME + 
+                       col_first_gen,
+                     data = gen_data_pass, family = "binomial")
+
+
+### Term Credits model
+gen_data_pass <- gen_data %>% 
+  mutate(passed = TERM_GPA >= 2) %>%
+  filter(cte_nobs == 0) %>%
+  filter(wd == 0) %>%
+  dplyr::select(bs_deg,
+                TERM_CREDITS,
+                AGE_ON_FIRST_DAY,
+                male, 
+                hr_rem, 
+                COLLEGE_READY_ENGLISH,
+                COLLEGE_READY_MATH,
+                TOTAL_CREDITS_EARNED,
+                FIRST_GENERATION_IND, 
+                EVER_CONCURRENT_IND,
+                HIGH_SCHOOL_GPA_AB,
+                HIGH_SCHOOL_GPA_BC,
+                HIGH_SCHOOL_GPA_CD,
+                HIGH_SCHOOL_GPA_DF,
+                CB_PCT_COL,
+                CB_MEDIAN_INCOME)
+
+gen_data_pass$AGE_ON_FIRST_DAY <- scale(gen_data_pass$AGE_ON_FIRST_DAY)
+gen_data_pass$TOTAL_CREDITS_EARNED <- scale(gen_data_pass$TOTAL_CREDITS_EARNED)
+gen_data_pass$TERM_CREDITS <- scale(gen_data_pass$TERM_CREDITS)
+gen_data_pass$COLLEGE_READY_ENGLISH <- ifelse(gen_data_pass$COLLEGE_READY_ENGLISH == "Y", 1, 0)
+gen_data_pass$COLLEGE_READY_MATH <- ifelse(gen_data_pass$COLLEGE_READY_MATH == "Y", 1,  0)
+gen_data_pass$CB_MEDIAN_INCOME <- scale(gen_data_pass$CB_MEDIAN_INCOME)
+gen_data_pass$male_age <- gen_data_pass$male*gen_data_pass$AGE_ON_FIRST_DAY # interaction variable for age and gender
+gen_data_pass$col_first_gen <- gen_data_pass$CB_PCT_COL*gen_data_pass$FIRST_GENERATION_IND # interaction variable for CB percent college and first gen
+
+covar_all <- names(gen_data_pass)
+covar <- covar_all[-c(1, 2)] # Term credits should be left in for Passes, TERM_GPA and Retention modeling but should be removed from term_credit modeling obviously
+
+fmla_bma <- as.formula(bs_deg ~ 
+                         AGE_ON_FIRST_DAY +
+                         male + 
+                         male_age +
+                         hr_rem + 
+                         COLLEGE_READY_ENGLISH +
+                         COLLEGE_READY_MATH +  
+                         TOTAL_CREDITS_EARNED + 
+                         FIRST_GENERATION_IND +
+                         EVER_CONCURRENT_IND +
+                         HIGH_SCHOOL_GPA_AB + 
+                         HIGH_SCHOOL_GPA_BC +
+                         HIGH_SCHOOL_GPA_CD + 
+                         HIGH_SCHOOL_GPA_DF + 
+                         CB_PCT_COL + 
+                         CB_MEDIAN_INCOME + 
+                         col_first_gen)
+
+
+# STEP 1: select propensity score models with BMA
+# Adapted from Cassie (Jianshen) Chen and David Kaplan 2014 r scrpit and paper
+# "Bayesian Model Averaging for Propensity Score Analysis"
+# BMA model selection
+bma_bus <- bic.glm(fmla_bma, data = gen_data_pass, glm.family = "binomial", occam.window = F)
+
+bma_bus$postprob # posterior predictive probability of each model
+cumsum(bma_bus$postprob) # cumulative posterior predivtive probabilities
+nmodel <- length(bma_bus$postprob) 
+variables <- bma_bus$which # which variables were selected by models for BMA
+
+# STEP 2: all BMA models with MCMClogit: Best  5  models (cumulative posterior probability =  0.6181)
+set.seed(1983)
+model <- rep(list(1), nmodel)
+gmodel <- rep(list(1), nmodel)
+bps_all <- rep(list(1), nmodel)
+fmla_models <- rep(list(1, nmodel)) # object to hold all the models used for MCMClogit estimation
+
+# for loop for running MCMC models based on BMA output
+for (i in 1:nmodel)
+{ 
+  fmla <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  fmla_models[[i]] <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  model[[i]] <- MCMClogit(fmla, data=gen_data_pass, glm.family="binomial",mcmc=40000,thin=40,burnin=5000)
+  gmodel[[i]] <- glm(fmla, data=gen_data_pass, family="binomial");
+  beta=model[[i]]                #Posterior sample of the PS model parameters; length= #of iterations
+  mat=model.matrix(gmodel[[i]])  #create a design matrix of covariates, length= # of students
+  ps_BPSA1 <- matrix(rep(0,nrow(model[[i]])*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+  
+  for(j in 1:nrow(beta)) # jth simulated set of beta => one set of ps
+  {
+    temp=mat%*%beta[j,]    
+    ps_BPSA1[,j] <- exp(temp)/(1+exp(temp))
+  }
+  bps_all[[i]] <- ps_BPSA1 ## save the posterior distribution of ps for each of the selected models
+}
+
+# STEP 3: Sampling from all models posterior distributions from the BMA to obtain the weighted model posterior distribution
+
+bma_ps2 <- matrix(rep(0,nrow(beta)*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+model_label <- 1:nmodel
+
+# sample weigths 
+post_prob <- bma_bus$postprob[1:nmodel]/sum(bma_bus$postprob[1:nmodel])
+
+for (k in 1:nrow(beta))
+{
+  bma_ps2[,k] <- bps_all[[sample(model_label,1,prob=post_prob)]][,k]
+}
+
+
+##### TERM CREDITS #######
+
+# STEP 4: match based on model from STEP 3
+
+# MatchBalance formula
+
+MB_fml <- as.formula(Tr ~ 
+                       AGE_ON_FIRST_DAY + 
+                       male + 
+                       hr_rem + 
+                       COLLEGE_READY_MATH + 
+                       COLLEGE_READY_ENGLISH + 
+                       CB_PCT_COL + 
+                       CB_MEDIAN_INCOME + 
+                       FIRST_GENERATION_IND + 
+                       EVER_CONCURRENT_IND)
+
+# 
+
+#### Optimal Matching
+# used Matching instead of optmatch library
+
+Y <- gen_data_pass$TERM_CREDITS
+Tr <- gen_data_pass$bs_deg
+m <- 5
+
+optm1=cbind(rep(0,nrow(beta)),rep(0,nrow(beta)))
+for(i in 1:nrow(beta))
+{
+  test=Match(Y=Y, Tr=Tr, X=bma_ps2[,i], ties=F, replace = T, M=m, version = "fast")
+  optm1[i,] <- c(test$est, test$se.standard)
+}
+
+# View(gen_data_pass[test$index.control,])
+
+# STEP 5: estimate the treatment effect
+
+tc_te <- optm1
+tr_ef_tc <- as.data.frame(tc_te)
+
+## Credit Momentum
+gen_data_pass <- gen_data %>% 
+  mutate(passed = TERM_GPA >= 2) %>%
+  filter(cte_nobs == 0) %>%
+  filter(wd == 0) %>%
+  dplyr::select(bs_deg,
+                credits_mo,
+                AGE_ON_FIRST_DAY,
+                male, 
+                hr_rem, 
+                COLLEGE_READY_ENGLISH,
+                COLLEGE_READY_MATH,
+                TOTAL_CREDITS_EARNED,
+                FIRST_GENERATION_IND, 
+                EVER_CONCURRENT_IND,
+                HIGH_SCHOOL_GPA_AB,
+                HIGH_SCHOOL_GPA_BC,
+                HIGH_SCHOOL_GPA_CD,
+                HIGH_SCHOOL_GPA_DF,
+                CB_PCT_COL,
+                CB_MEDIAN_INCOME)
+
+gen_data_pass$AGE_ON_FIRST_DAY <- scale(gen_data_pass$AGE_ON_FIRST_DAY)
+gen_data_pass$TOTAL_CREDITS_EARNED <- scale(gen_data_pass$TOTAL_CREDITS_EARNED)
+gen_data_pass$COLLEGE_READY_ENGLISH <- ifelse(gen_data_pass$COLLEGE_READY_ENGLISH == "Y", 1, 0)
+gen_data_pass$COLLEGE_READY_MATH <- ifelse(gen_data_pass$COLLEGE_READY_MATH == "Y", 1,  0)
+gen_data_pass$CB_MEDIAN_INCOME <- scale(gen_data_pass$CB_MEDIAN_INCOME)
+gen_data_pass$male_age <- gen_data_pass$male*gen_data_pass$AGE_ON_FIRST_DAY # interaction variable for age and gender
+gen_data_pass$col_first_gen <- gen_data_pass$CB_PCT_COL*gen_data_pass$FIRST_GENERATION_IND # interaction variable for CB percent college and first gen
+
+covar_all <- names(gen_data_pass)
+covar <- covar_all[-c(1, 2)] # Term credits should be left in for Passes, TERM_GPA and Retention modeling but should be removed from term_credit modeling obviously
+
+fmla_bma <- as.formula(bs_deg ~ 
+                         AGE_ON_FIRST_DAY +
+                         male + 
+                         male_age +
+                         hr_rem + 
+                         COLLEGE_READY_ENGLISH +
+                         COLLEGE_READY_MATH +  
+                         TOTAL_CREDITS_EARNED + 
+                         FIRST_GENERATION_IND +
+                         EVER_CONCURRENT_IND +
+                         HIGH_SCHOOL_GPA_AB + 
+                         HIGH_SCHOOL_GPA_BC +
+                         HIGH_SCHOOL_GPA_CD + 
+                         HIGH_SCHOOL_GPA_DF + 
+                         CB_PCT_COL + 
+                         CB_MEDIAN_INCOME + 
+                         col_first_gen)
+
+
+# STEP 1: select propensity score models with BMA
+# Adapted from Cassie (Jianshen) Chen and David Kaplan 2014 r scrpit and paper
+# "Bayesian Model Averaging for Propensity Score Analysis"
+# BMA model selection
+bma_bus <- bic.glm(fmla_bma, data = gen_data_pass, glm.family = "binomial", occam.window = F)
+
+bma_bus$postprob # posterior predictive probability of each model
+cumsum(bma_bus$postprob) # cumulative posterior predivtive probabilities
+nmodel <- length(bma_bus$postprob) 
+variables <- bma_bus$which # which variables were selected by models for BMA
+
+# STEP 2: all BMA models with MCMClogit: Best  5  models (cumulative posterior probability =  0.6181)
+set.seed(1983)
+model <- rep(list(1), nmodel)
+gmodel <- rep(list(1), nmodel)
+bps_all <- rep(list(1), nmodel)
+fmla_models <- rep(list(1, nmodel)) # object to hold all the models used for MCMClogit estimation
+
+# for loop for running MCMC models based on BMA output
+for (i in 1:nmodel)
+{ 
+  fmla <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  fmla_models[[i]] <- as.formula(paste("bs_deg ~ ", paste(covar[variables[i,]==TRUE], collapse= "+")))
+  model[[i]] <- MCMClogit(fmla, data=gen_data_pass, glm.family="binomial",mcmc=40000,thin=40,burnin=5000)
+  gmodel[[i]] <- glm(fmla, data=gen_data_pass, family="binomial");
+  beta=model[[i]]                #Posterior sample of the PS model parameters; length= #of iterations
+  mat=model.matrix(gmodel[[i]])  #create a design matrix of covariates, length= # of students
+  ps_BPSA1 <- matrix(rep(0,nrow(model[[i]])*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+  
+  for(j in 1:nrow(beta)) # jth simulated set of beta => one set of ps
+  {
+    temp=mat%*%beta[j,]    
+    ps_BPSA1[,j] <- exp(temp)/(1+exp(temp))
+  }
+  bps_all[[i]] <- ps_BPSA1 ## save the posterior distribution of ps for each of the selected models
+}
+
+# STEP 3: Sampling from all models posterior distributions from the BMA to obtain the weighted model posterior distribution
+
+bma_ps2 <- matrix(rep(0,nrow(beta)*nrow(gen_data_pass)),nrow=nrow(gen_data_pass))
+model_label <- 1:nmodel
+
+# sample weigths 
+post_prob <- bma_bus$postprob[1:nmodel]/sum(bma_bus$postprob[1:nmodel])
+
+for (k in 1:nrow(beta))
+{
+  bma_ps2[,k] <- bps_all[[sample(model_label,1,prob=post_prob)]][,k]
+}
+
+##### TERM CREDITS #######
+
+# STEP 4: match based on model from STEP 3
+
+# MatchBalance formula
+
+MB_fml <- as.formula(Tr ~ 
+                       AGE_ON_FIRST_DAY + 
+                       male + 
+                       hr_rem + 
+                       COLLEGE_READY_MATH + 
+                       COLLEGE_READY_ENGLISH + 
+                       CB_PCT_COL + 
+                       CB_MEDIAN_INCOME + 
+                       FIRST_GENERATION_IND + 
+                       EVER_CONCURRENT_IND)
+
+#### Optimal Matching
+# used Matching instead of optmatch library
+
+Y <- gen_data_pass$credits_mo
+Tr <- gen_data_pass$bs_deg
+m <- 5
+
+optm1=cbind(rep(0,nrow(beta)),rep(0,nrow(beta)))
+for(i in 1:nrow(beta))
+{
+  test=Match(Y=Y, Tr=Tr, X=bma_ps2[,i], ties=F, replace = T, M=m, version = "fast")
+  optm1[i,] <- c(test$est, test$se.standard)
+}
+
+# View(gen_data_pass[test$index.control,])
+
+# STEP 5: estimate the treatment effect
+
+tc_mo_te <- optm1
+tr_ef_mo <- as.data.frame(tc_mo_te)

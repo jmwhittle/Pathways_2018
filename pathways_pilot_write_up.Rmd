@@ -1,7 +1,7 @@
 ---
 title: "Pathways Pilot Study"
 author: "Jason Whittle"
-date: "2/4/2019"
+date: "2/21/2019"
 header-includes:
     - \usepackage{fancyhdr}
     - \pagestyle{fancy}
@@ -27,23 +27,93 @@ source('~/Documents/Pathways_2018/pathways_bus_study.R')
 source('~/Documents/Pathways_2018/pathways_gen_study.R')
 ```
 
-
 ```{r}
 library(tidyverse); theme_set(theme_minimal())
 ```
 
 # Pathways Pilot Results Summary
 
+One semester into the Business Program's (BUS) Pathways Pilot (PP) there is little to show in terms of statistical results (as one would expect). There is only one significant (i.e. possibly non-random) result where first year BUS students in Fall 2018 had an estimated  17% increase in taking a course that counted for their Quantitative Literacy (QL) credit in there first two semesters (Fall 2018/Spring 2019) over first term BUS students in the recent past.\footnote{Two different model specifications estimated the increase on QL courses to be a non-random result} The 17% increase in QL courses however translates to only 6 additional students taking these courses. Table 1 displays the raw differences for this PP effect with table six later in the paper displaying the modeled estimates. 
+
+```{r}
+bus_data %>% group_by(TERM_CODE, QL_ENROLLMENTS) %>% 
+  summarise(n_dist = n_distinct(PIDM)) %>%
+  group_by(TERM_CODE) %>% 
+  summarise(n_pct = round(n_dist[QL_ENROLLMENTS == 1]/sum(n_dist), 4)*100,
+            ndis = n_dist[QL_ENROLLMENTS == 1]) %>%
+  knitr::kable(col.names = c("TERM", "Percent of BUS Students","# of Students"), 
+               caption = "Percent of First Year BUS students taking QL Course in their First Year.")
+```
+
+
 # Pathways Background
+
+Pathways is based on a large amount of research primarily associated with the Community College Research Center (CCRC) at Columbia University.\footnote{Thomas R. Bailey (2017). Guided Pathways at Community Colleges: From Theory to Practice. Diversity and Democracy. Vol. 20, No.4 https://ccrc.tc.Columbia.edu/publications/guided-pathways-community-colleges-theory-practice.html} Much of the thinking in the summary literature relates around helping students clarify their academic goals and creating pathways for them to take to arrive at their goal. There is a lot of research suggesting that students who have a clear vision of their goal and the steps needed to attain their goal perform better than those that "meander" through college. This research will tie into some of the early momentum metrics that are examined below.\footnote{Davis Jenkins and Thomas Bailey (2017). Early Momentum Metrics: Why They Matter for College Improvement, CCRC Research Brief, Number 65.} Jenkins and Bailey (2017) recommended three 'preliminary' metric be used to evaluate the implementation of a Pathways program after the first full year (Currently the PP is 1.5 semester into implementation) and advised against looking at ultimate student outcomes until the program had been fully implemented. These three additional metrics are designed to see if students are making progress in areas associated with students success. 
+
+The first additional metric is `credit momentum' as summary article from the CRCC show a correlation with students who take 15 credit hours a term or more in their first semester are more likely to graduate than students who don't. The thinking by the CRCC is that if you can entice students to act like successful students they will in fact become successful students. The second metric from Jenkins and Bailey is they call 'program momentum' which is taking 3 courses within your major in your first full year (this evaluation uses 9 credits or more in the first two semesters). Program momentum is also correlated with student success in a similar manner to the credit momentum metric. The third metric is 'Gateway momentum' this evaluates if the student is taking critical general education credits in their first year. For gateway momentum this study focuses on two separate measures taking either English (ENGL) 1010 or 2010 in their first two semesters for one and the second focuses on if the students took their Quantitative Literacy (QL) Math course in their first two semesters. 
 
 # Evaluation methods
 
+There were two primary methods used to evaluate both data sets. The first method evaluates Business students with a combination of linear and logistic regression techniques.  The second method compares non-Business majors to Business majors with propensity score matching (PSM) based on linear/logistic regression techniques. Both of these methods rely on Bayesian regressions using Markov-Chain Monte Carlo (MCMC) simulations from the R packages MCMCpack and BMA.\footnote{Andrew D. Martin, Kevin M. Quinn, Jong Hee Park (2011). *MCMCpack: Markov Chain Monte Carlo in R*. Journal of Statistical Software. 42(9): 1-21. URL http://www.jstatsoft.org/v42/i09/.} \footnote{Adrian Raftery, Jennifer Hoeting, Chris Volinsky, Ian Painter, Ka Yee, Yeung, URL https://cran.r-project.org/web/packages/BMA/index.html}  The PSM will also utilize Jasjeet Sekhon's Matching package to calculate the average treatment effect of the treated (or the difference between the PP students and their comparison groups).\footnote{JasJess S. Sekhon (2011), *Multivariate and Propensity Score Matching Software with Automated Balance Optimization: The Matching Package for R*. Journal of Statistical Software. 42(7): 1-52.}
+
+There are some large limitations with this program evaluation that might be useful to consider for future program evaluations at SLCC. Evaluating a program after one semester of implementations (with only one adviser) severely hamstrings the ability to perceive a true signal through the large amount of noise in academic data. There is a considerable amount of organizational and logistics that will likely be improved upon just by advising this way for a second time. This study is not measuring if Pathways will be successful at SLCC, it is evaluating the impact of the initial switch to a Pathways advising model by one adviser in one semester.\footnote{Perhaps the switch to Pathways will be easier for other advisers (perhaps not) or maybe real impacts become clear after the advisers have experienced this advising method multiple times and have time to adjust their messaging to students.} 
+
+Evaluations of major college programs are labor intensive and require a considerable amount of time (and probably are given undue consideration). When we preform these program evaluations at such a preliminary moment in the full implementation of a program\footnote{One semester into a multi-year and multi-faceted program.} we are unlikely to see significant impacts or have any real certainty about the results found. This fact is unchanged by the statistical methodology used because it is not a problem of technique but one of too few observations. 
+
+While these evaluations are designed with the best intention and the ultimate goal of many of these programs is moving student outcomes such as completions. I (Jason Whittle) have come to believe these are 'putting the cart before the horse' from a program implementation stand point. It might be useful with programs of this nature to instead focus research efforts on questions of process improvement\footnote{Contact methods for advisers, frequency of visits, incentives for students etc.} rather than immediately jumping to student effects.  
+
 ## Data
 
-## Buisness student comparison
+Both data sets used to evaluate the Pathways Business program pilot were pulled from SLCC's data warehouse and is largely composed of admissions and banner data. An additional data source comes from a file maintained by Michael Purles keeping track of those students he advised as part of the pilot. 
 
-### Credit momentum
+The first data set contains only first term Fall semester non-concurrent Business majors from Fall 2015 to Fall 2018. This data set is meant to compare business students to business students in an attempt to eliminate any self-selection bias based on major. The assumption is that the reason students choose to major in business hasn't changed in meaningful ways over this time period. This control group is great for controlling individual student characteristics as will be shown below but lacks an ability to control for changes in the college over time. 
 
+The second data set contains only first term Fall 2018 non-concurrent non-general studies majors. This data set is meant to eliminate any time-series effects such as declining enrollment over time that might show up in looking at just BUS majors over time. Since The Pathways pilot was only open to students who had already declared a major it was decided to not compare the PP students to General Studies majors. The thinking behind this stems from the fact that students who do not know what to major in might perform systematically different than those students who knew what they wanted to major in and the effectiveness of the changes to advising would not be clear. 
+
+## Buisness Student Comparison
+
+The first comparison group used to compare PP students was Business majors from recent previous years. These students were very similar to each other in terms of demographics and academic records. The downside to this comparison groups is SLCC is always changing and a student from Fall 2015 might have a different experience (beyond the pathways program) than a student in Fall 2018. In essence these students are more similar in characteristics than the second comparison in this study but they may have meaningfully different experiences in their first semester. 
+
+### How do these students compare to each other?
+
+The BUS students in this analysis are very similarly in almost all dimensions examined. Again, this part of the study compares first year non-concurrent Business majors from the last four years (Fall 2015-Fall 2018). Below are two tables that summarize the average demographics and prior academics by term. As can be seen below the students from 2018 are similar and not systematically different than previous years. 
+
+```{r}
+# Demographics
+bus_data %>% group_by(TERM_CODE) %>% 
+  summarise(age = round(mean(AGE_ON_FIRST_DAY)), 
+            male = round(sum(PIDM[male == 1])/sum(PIDM), 4)*100,
+            white = round(sum(PIDM[ETHNICITY_CODE == "W"])/sum(PIDM),4)*100,
+            first_gen = round(sum(PIDM[FIRST_GENERATION_IND == 1])/sum(PIDM),4)*100,
+            CB_inc = round(mean(CB_MEDIAN_INCOME))) %>%
+  knitr::kable(col.names = c("Term", "Age", "% Male", "% White", "% First Gen", "Census Block Income"),
+               caption = "Average Demographics comparisons")
+```
+
+```{r}
+# Academics
+bus_data %>% group_by(TERM_CODE) %>%
+  summarise(col_math = round(sum(PIDM[COLLEGE_READY_MATH == "Y"])/sum(PIDM), 4)*100,
+            col_engl = round(sum(PIDM[COLLEGE_READY_ENGLISH == "Y"])/sum(PIDM),4)*100,
+            hig_gpa = round(mean(hs_gpa, na.rm = T),3)) %>%
+  knitr::kable(col.names = c("Term", "% College Ready Math", "% College Ready Engl", "High School GPA"),
+               caption = "Average prior Academic comparisons")
+  
+```
+
+### Plot Interpretation
+
+The Figures Below show the distribution of estimated treatment effects by the MCMC process (x-axis). MCMC estimates effects by 'sampling' thousands of times (40,000 times per potential effect for this study). Similar to rolling dice thousands of times and recording the outcomes to get an understanding of whether the dice are fair or not. The estimated treatment effects are along the x-axis (the outcomes of rolling the dice 40,000 times) of the figures below. 
+
+The y-axis represents the density (relative frequency) of the estimated outcomes (x-axis). The total area under the curve (shaded blue) will equal 100, values on the y-axis represent the percent of the total estimates at the corresponding x-axis location. If a y-axis value is 1.5 for instance that means that at the corresponding x-axis value 1.5 of the total estimates were at that specific point. The density plot is useful because if smooths out small differences in the underlying histograms, it is not manipulated the way a histogram can be by 'bin' size selections, and is automatically scaled allowing for direct comparison between distribution (you can't do this with a histogram without re-scaling their y-axis). The underlying scaled histograms are included to help the reader understand how to interpret a density plot. 
+
+There are three vertical lines in all plots. The solid black line is centered at zero. Zero is important because before there can even be a discussion of the size of an impact it should be obvious to us if the impact is clearly positive or negative. The two dashed line represent the 95% confidence interval (2.5% and 97.5% respectively) for the estimated treatment effects. In order for something to be considered different from random noise in the data the space between the dashed lines cannot contain zero (black solid line). The x-axis will be addressed on a figure by figure biases below as the interpretation will be different for the two different studies (BUS only comparison and the PP to non-General Studies).
+
+\newpage
+
+### Credit Momentum
+
+The plot below shows the distribution of the estimated treatment effects for the PP on CRCC's credit momentum metric (Term Credit > 15) in Fall 2018. There were significant estimated effects at zero and many estimated below zero. There was no impact on credit momentum as a result of the PP in Fall 2018.
 
 ```{r, scale = 75}
  df_mo %>%
@@ -51,14 +121,25 @@ library(tidyverse); theme_set(theme_minimal())
   geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
   geom_density(alpha = .2, fill = "#00abe1") + 
   labs(title ="Pathways Estimated Treatment Effect on Credit Momentum", 
-       x = "",
-       y = "Percent of Estimated Effects") + 
+       x = "Estimated Treatment Effect",
+       y = "Density of Treatment Effect Estimates") + 
   geom_vline(xintercept = 0) + 
   geom_vline(xintercept = bus_mo_sum$quantiles[13,1], linetype = "dashed") + 
   geom_vline(xintercept = bus_mo_sum$quantiles[13,5], linetype = "dashed")
 ```
 
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on credit momentum metric in Fall 2018. The values are in log-odds and not converted to percentages since the results are clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+credit_mo_tb <- cbind(round(100*(mean(df_mo$var1)), 2), round(100*(bus_mo_sum$quantiles[13,1]),2), round(100*(bus_mo_sum$quantiles[13,5]), 2))
+knitr::kable(credit_mo_tb, col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), caption = "Pathways Estimated Treatment Effect on Credit Momentum")
+```
+
+\newpage
+
 ### Program momentum
+
+The plot below shows the distribution of the estimated treatment effects for the PP on program momentum (9 credit hours in BUS) in both Fall 2018 and Spring 2019. There were significant estimated effects at zero and many estimated below zero. There was likely no impact on program momentum as a result of the PP in Fall 2018 and Spring 2019.\footnote{possibly a small decrease in BUS courses taken but not statistically significantly negative.}
 
 ```{r}
 df_pro_gate %>%
@@ -73,20 +154,72 @@ df_pro_gate %>%
   geom_vline(xintercept = bus_gate_model_sum$quantiles[13,5], linetype = "dashed")
 ```
 
-### Gateway momentum
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on the program momentum metric in Fall 2018 and Spring 2019. The values are in log-odds and not converted to percentages since the results are clearly irrelevant with a significant amount of both positive and negative estimates. 
 
 ```{r}
- df_ql %>%
-  ggplot(aes(var1)) + 
-  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
-  geom_density(alpha = .2, fill = "#00abe1") + 
-  labs(title ="Pathways Estimated Treatment Effect on QL gateway Momentum",
-       x = "",
-       y = "Percent of Estimated Effects") + 
-  geom_vline(xintercept = 0) + 
-  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,1], linetype = "dashed") + 
-  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,5], linetype = "dashed")
+pro_gate_tb <- cbind(round(100*(mean(df_pro_gate$var1)), 2), 
+                     round(100*(bus_gate_model_sum$quantiles[13,1]),2), 
+                     round(100*(bus_gate_model_sum$quantiles[13,5]), 2)
+                     )
+knitr::kable(pro_gate_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Program Momentum")
 ```
+
+\newpage
+
+### Gateway momentum
+
+The plot below shows the distribution of the estimated treatment effects for the PP on CRCC's QL gateway momentum (enrolled in a QL course) in either Fall 2018 or Spring 2019. There were significant estimated effects greater than zero and very few estimated below zero. There was likely a positive impact on QL gateway momentum as a result of the PP in Fall 2018 and Spring 2019. Putting this positive result into perspective while the statistical model used to evaluate QL momentum showed a clear positive impact this corresponds to a 6 student improvement over the previous two years (about a 1.3% increase as shown on table 1). The values below along the x-axis have been converted to percent change (or difference) from log-odds and can be directly interpreted as the increased likelihood of enrolling in a QL course because of the PP in Fall 2018. For example an estimated treatment effect of .2 should be interpreted as a 20% increase likelihood of enrolling in a QL course for a PP student. 
+
+```{r}
+
+test <- df_ql
+test$var2 <- (exp(df_ql$var1)/(1 + exp(df_ql$var1)) -.5)
+test$var2_5 <- exp(bus_ql_model_sum$quantiles[13,1])/(1 + exp(bus_ql_model_sum$quantiles[13,1]))
+test$var97 <- exp(bus_ql_model_sum$quantiles[13,5])/(1 + exp(bus_ql_model_sum$quantiles[13,5]))
+
+test %>%
+  ggplot(aes(var2)) +
+  geom_histogram(aes(y=..density..), fill = "white", colour = "black") +
+  geom_density(alpha = .2, fill = "#00abe1") +
+  labs(title ="Pathways Estimated Treatment Effect on QL gateway Momentum",
+       x = "Estimated Percent Difference in QL Momentum as a Result of Pathways",
+       y = "Percent of Estimated Effects") +
+  geom_vline(xintercept = 0) +
+  geom_vline(xintercept = mean(test$var2_5)-.5, linetype = "dashed") +
+  geom_vline(xintercept = mean(test$var97)-.5, linetype = "dashed")
+
+
+ # df_ql %>%
+ #  ggplot(aes(var1)) + 
+ #  geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
+ #  geom_density(alpha = .2, fill = "#00abe1") + 
+ #  labs(title ="Pathways Estimated Treatment Effect on QL gateway Momentum",
+ #       x = "Estimated Percent change in QL Momentum as a result of Pathways",
+ #       y = "Percent of Estimated Effects") + 
+ #  geom_vline(xintercept = 0) + 
+ #  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,1], linetype = "dashed") + 
+ #  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,5], linetype = "dashed")
+```
+
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on QL gateway momentum in Fall 2018 or Spring 2019. The values are in percentage difference and should be interpreted for this case as the percent increase as a result of the PP in Fall 2018. 
+
+```{r}
+ql_tb <- cbind(round(100*(mean(exp(df_ql$var1)/(1 + exp(df_ql$var1))-.5)), 2), 
+                     round(100*(exp(bus_ql_model_sum$quantiles[13,1])/(1 + exp(bus_ql_model_sum$quantiles[13,1]))-.5),2), 
+                     round(100*(exp(bus_ql_model_sum$quantiles[13,5])/(1 + exp(bus_ql_model_sum$quantiles[13,5]))-.5), 2)
+                     )
+knitr::kable(ql_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Quantitative Literacy Momentum")
+
+
+```
+
+\newpage
+
+The plot below shows the distribution of the estimated treatment effects for the PP on CRCC's ENGL gateway momentum metric (enrolling in either ENGL 1010 or ENGL 2010) in Fall 2018 or Spring 2019. There were significant estimated effects at zero and many estimated below zero. There was no impact on ENGL gateway momentum as a result of the PP in Fall 2018 or Spring 2019.
 
 ```{r}
 df_engl %>%
@@ -101,7 +234,23 @@ df_engl %>%
   geom_vline(xintercept = bus_engl_model_sum$quantiles[13,5], linetype = "dashed")
 ```
 
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on the ENGL gateway momentum metric in Fall 2018 and Spring 2019. The values are in log-odds and not converted to percentages since the results are clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+engl_tb <- cbind(round(100*(mean(df_engl$var1)), 2), 
+                     round(100*(bus_engl_model_sum$quantiles[13,1]),2), 
+                     round(100*(bus_engl_model_sum$quantiles[13,5]), 2)
+                     )
+knitr::kable(engl_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on English Momentum")
+```
+
+\newpage
+
 ### Passing GPA
+
+The plot below shows the distribution of the estimated treatment effects for the PP on a passing term GPA (> 2.0) in Fall 2018. There were significant estimated effects at zero and many estimated below zero. There was no impact on passing GPA as a result of the PP in Fall 2018.
 
 ```{r}
  df_pass %>%
@@ -116,7 +265,21 @@ df_engl %>%
   geom_vline(xintercept = bus_pass_sum$quantiles[14,5], linetype = "dashed")
 ```
 
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on a passing term GPA ( > 2.0) in Fall 2018. The values are in log-odds and not converted to percentages since the results are clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+pass_tb <- cbind(round(100*(mean(df_pass$var1)), 2), 
+                     round(100*(bus_pass_sum$quantiles[14,1]),2), 
+                     round(100*(bus_pass_sum$quantiles[14,5]), 2)
+                     )
+knitr::kable(pass_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Passing GPA")
+```
+
 ### Fall to Spring Retention
+
+The plot below shows the distribution of the estimated treatment effects for the PP on Fall to Spring Retention. There were significant estimated effects at zero and many estimated below zero. There was no impact on Fall to Spring Retention as a result of the PP in Fall 2018.
 
 ```{r}
 df_ret %>%
@@ -131,7 +294,23 @@ df_ret %>%
   geom_vline(xintercept = bus_ret_sum$quantiles[14,5], linetype = "dashed")
 ```
 
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on a passing term GPA ( > 2.0) in Fall 2018. The values are in log-odds and not converted to percentages since the results are clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+ret_tb <- cbind(round(100*(mean(df_ret$var1)), 2), 
+                     round(100*(bus_ret_sum$quantiles[14,1]),2), 
+                     round(100*(bus_ret_sum$quantiles[14,5]), 2)
+                     )
+knitr::kable(ret_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Fall-Spring Retention")
+```
+
+\newpage
+
 ### Term Credits
+
+The plot below shows the distribution of the estimated treatment effects for the PP on Fall 2018 term credits. There were significant estimated effects at zero and many estimated below zero. There was no impact on Fall 2018 term credits taken as a result of the PP in Fall 2018.
 
 ```{r}
 df_tc %>%
@@ -144,11 +323,36 @@ df_tc %>%
   geom_vline(xintercept = 0) + 
   geom_vline(xintercept = bus_tc_sum$quantiles[13,1], linetype = "dashed") + 
   geom_vline(xintercept = bus_tc_sum$quantiles[13,5], linetype = "dashed")
+
+```
+
+The table below represents the mean and the confidence interval bounds of the estimated treatment effect of the PP on term credits taken in Fall 2018. The values are *not* in log-odds and are in credit units however these values are clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+tc_tb <- cbind(round(100*(mean(df_tc$var1)), 2), 
+                     round(100*(bus_tc_sum$quantiles[13,1]),2), 
+                     round(100*(bus_tc_sum$quantiles[13,5]), 2)
+                     )
+knitr::kable(tc_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Term Credits")
 ```
 
 ## Fall semester comparison
 
+For this portion of the study first term non-concurrent BUS students who were a part of the PP (actually contacted) are compared to other first term non-concurrent students who are *not* general studies majors (i.e. Chemistry, Sociology, Economic etc.). The group is analysed to control for any time trends. 
+
+### Matching Method
+
+A new approach to propensity score matching (PSM) was used for this study that took advantage of Bayesian Model Averaging (BMA) to produce a set of possible models as opposed to just one that has traditionally been used for PSM at SLCC. BMA is very useful if the underlying data generating process is unknown. In this case, we do not have a clear theory for modeling why students choose Business as their major on their application as opposed to other majors.\footnote{Since the major chosen might have a systematic correlation with academic ability it is important to attempt to adjust for this possible self-selection bias.} 
+
+BMA evaluates all logit models with explanatory power within a given data set. There is an option to penalize models for over-specifications (over-fitting) but this was not done for this study reflecting the lack of understanding about why students choose their majors. After evaluating all models BMA weights the estimate of each model based on the likelihood of being the 'correct' model. This method makes looking at comparisons between treatment (Pathways students) and control groups difficult since there are around 100 PSM with 1000 estimates per model\footnote{Using every 40th estimate out of 40,000.}, meaning Pathways students are matched to hundreds of control students and the effect of Pathways is estimated thousands of times. However the estimated treatment effects are very robust and account for a lot of our uncertainty compared to using just one model. This method so far prevents us from exploring directly how well the matching process worked for each model however, since this is an additional model check to the first study and has been checked using one standard logit model we will not dwell on this but just note it for future development at SLCC.  This method has been used in the peer-reviewed literature to balance data sets in educational research by Jianshen Chen and David Kaplan (2015).\footnote{Jianshen Chen and David Kaplan (2015) "Covariate Balance in Bayesian Propensity Score Approaches for Observational Studies", Journal of Research on Educational Effectiveness, 8:280-302.} 
+
+\newpage
+
 ### Passing GPA
+
+The plot below shows the distribution of the estimated treatment effects for the PP on Passing Term GPA (> 2.0) in Fall 2018. There were significant estimated effects at zero and many estimated below zero. There was no impact on Passing GPA as a result of the PP in Fall 2018. The x-axis values represent the difference between the treatment and the control group in the percent of students receiving a passing term GPA in Fall 2018.
 
 ```{r}
 tr_ef_passing  %>% 
@@ -162,7 +366,23 @@ tr_ef_passing  %>%
        title = "Distribution of Treatment Effect Estimates")
 ```
 
+The table below represents the mean and the bounds of the estimated treatment effect of the PP on Passing Term GPA (> 2.0) in Fall 2018. The values in the table and its accompanying plot's x-axis are the difference of means between the treatment group (PP students) and the control groups selected by PSM. For the passing term GPA indicator should be seen as percent difference between the groups. The values are however clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+tr_pass_tb <- cbind(round(100*(mean(tr_ef_passing$V1)), 2), 
+                     round(100*(quantile(tr_ef_passing$V1, probs = .025)),2), 
+                     round(100*(quantile(tr_ef_passing$V1, probs = .975)), 2)
+                     )
+knitr::kable(tr_pass_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Passing GPA")
+```
+
+\newpage
+
 ### Fall to Spring Retention
+
+The plot below shows the distribution of the estimated treatment effects for the PP on Fall to Spring retention. There were significant estimated effects at zero and many estimated below zero. There was no impact on Fall to Spring retention as a result of the PP in Fall 2018. The x-axis values represent the difference between the treatment and the control group in percent of students F-S retaining units.
 
 ```{r}
 tr_ef_ret  %>% 
@@ -174,10 +394,25 @@ tr_ef_ret  %>%
   geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .025), linetype="dotted") +
   labs(x = "Estimated Treatment Effect on Fall-Spring retention of Pathways",
        title = "Distribution of Treatment Effect Estimates")
+
 ```
 
+The table below represents the mean and the bounds of the estimated treatment effect of the PP on Fall to Spring retention. The values in the table and its accompanying plot's x-axis are the difference of means between the treatment group (PP students) and the control groups selected by PSM. For the Fall to Spring retention indicator should be seen as percent difference between the groups. The values are however clearly irrelevant with a significant amount of both positive and negative estimates. 
+
+```{r}
+tr_ret_tb <- cbind(round(100*(mean(tr_ef_ret$V1)), 2), 
+                     round(100*(quantile(tr_ef_ret$V1, probs = .025)),2), 
+                     round(100*(quantile(tr_ef_ret$V1, probs = .975)), 2)
+                     )
+knitr::kable(tr_ret_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Fall-Spring Retention")
+```
+
+\newpage
 
 ### Term Credits
+The plot below shows the distribution of the estimated treatment effects for the PP on Fall 2018 term credits. There were significant estimated effects at zero and many estimated below zero. There was no impact on Fall 2018 term credits as a result of the PP in Fall 2018. The x-axis values represent the difference between the treatment and the control group in term credit units.
 
 ```{r}
 
@@ -186,9 +421,17 @@ tr_ef_tc  %>%
   geom_histogram(aes(y=..density..), fill = "white", colour = "black") + 
   geom_density(alpha = .2, fill = "#00abe1") + 
   geom_vline(xintercept = 0) +
-  geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .975), linetype="dotted") + 
-  geom_vline(xintercept = quantile(tr_ef_ret$V1, probs = .025), linetype="dotted") +
+  geom_vline(xintercept = quantile(tr_ef_tc$V1, probs = .975), linetype="dotted") + 
+  geom_vline(xintercept = quantile(tr_ef_tc$V1, probs = .025), linetype="dotted") +
   labs(x = "Estimated Treatment Effect on Passing GPA of Pathways",
        title = "Distribution of Treatment Effect Estimates")
+
+tr_tc_tb <- cbind(round(100*(mean(tr_ef_tc$V1)), 2), 
+                     round(100*(quantile(tr_ef_tc$V1, probs = .025)),2), 
+                     round(100*(quantile(tr_ef_tc$V1, probs = .975)), 2)
+                     )
+knitr::kable(tr_tc_tb, 
+             col.names = c("Mean Estimate", "2.5% Estimate", "97.5% Estimate"), 
+             caption = "Pathways Estimated Treatment Effect on Term Credits")
 ```
 

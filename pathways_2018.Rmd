@@ -112,6 +112,8 @@ bus_data$FALL_SPRING_RETENTION <- ifelse(bus_data$FALL_SPRING_RETENTION == "Y", 
 bus_data$FALL_SPRING_RETENTION[is.na(bus_data$FALL_SPRING_RETENTION) == T] <- 0
 bus_data$EVER_CONCURRENT_IND <- ifelse(bus_data$EVER_CONCURRENT_IND == "Y", 1, 0)
 
+bus_data$hs_gpa <- bus_data$HIGH_SCHOOL_GPA
+
 bus_data$HIGH_SCHOOL_GPA <- ifelse(bus_data$HIGH_SCHOOL_GPA > 3, "AB",
                                 ifelse(bus_data$HIGH_SCHOOL_GPA > 2, "BC", 
                                        ifelse(bus_data$HIGH_SCHOOL_GPA > 1, "CD", 
@@ -123,10 +125,15 @@ bus_data$hr_rem <- ifelse(bus_data$ETHNICITY_CODE == "P" | bus_data$ETHNICITY_CO
 
 # imputing and adjusting problem data
 ## placement scores (max score is 120 so all values above this are incorrect)
-bus_data$CPT_ARITHMEIC[bus_data$CPT_ARITHMEIC > 120] <- mean(bus_data$CPT_ARITHMEIC)
-bus_data$CPT_COLLEGE_MATH[bus_data$CPT_COLLEGE_MATH > 120] <- mean(bus_data$CPT_COLLEGE_MATH)
-bus_data$CPT_ELEM_ALGEBRA[bus_data$CPT_ELEM_ALGEBRA > 120] <- mean(bus_data$CPT_ELEM_ALGEBRA)
-bus_data$CPT_READING[bus_data$CPT_READING > 120] <- mean(bus_data$CPT_READING)
+#### There was a placement experiment that used 998 as a values so >120 are not incorrect
+# bus_data$CPT_ARITHMEIC[bus_data$CPT_ARITHMEIC > 120] <- mean(bus_data$CPT_ARITHMEIC)
+# bus_data$CPT_COLLEGE_MATH[bus_data$CPT_COLLEGE_MATH > 120] <- mean(bus_data$CPT_COLLEGE_MATH)
+# bus_data$CPT_ELEM_ALGEBRA[bus_data$CPT_ELEM_ALGEBRA > 120] <- mean(bus_data$CPT_ELEM_ALGEBRA)
+# bus_data$CPT_READING[bus_data$CPT_READING > 120] <- mean(bus_data$CPT_READING)
+
+bus_data$math_place <- ifelse(bus_data$CPT_COLLEGE_MATH > 120, 1, 0)
+bus_data$math_place[is.na(bus_data$math_place) == T] <- 0
+
 
 ## CB data
 bus_data$CB_MEDIAN_INCOME[bus_data$CB_MEDIAN_INCOME < 0] <- mean(bus_data$CB_MEDIAN_INCOME)
@@ -349,20 +356,28 @@ bus_ql_mcmc <- as.formula(QL_ENROLLMENTS ~
                      CB_PCT_COL + 
                      scale(CB_MEDIAN_INCOME) + 
                      col_first_gen +
+                     math_place + 
                      treated)
 
 bus_ql_model <- MCMClogit(bus_ql_mcmc, data = bus_data, glm.family="binomial",mcmc=40000,thin=40,burnin=5000)
 bus_ql_model_sum <- summary(bus_ql_model)
-plot(bus_ql_model[,13], density = TRUE, trace = FALSE, main = "Pathways Estimated Treatment Effect on QL gateway Momentum", xlab = "") # checked (actual affect is probably from self-guided placement)
+plot(bus_ql_model[,14], density = TRUE, trace = FALSE, main = "Pathways Estimated Treatment Effect on QL gateway Momentum", xlab = "") # checked (actual affect is probably from self-guided placement)
 
-df_ql <- as.data.frame(bus_ql_model[,13])
+summary(bus_ql_model)
+
+exp(0.1742)/(1 + (exp(0.1742)))
+exp(1.5219)/(1 + (exp(1.5219)))
+
+mean(exp(bus_ql_model[,14])/(1 + (exp(bus_ql_model[,14]))))
+
+df_ql <- as.data.frame(bus_ql_model[,14])
 bus_ql_mo <- df_ql %>%
   ggplot() + 
   geom_density(aes(var1)) + 
   labs(title ="Pathways Estimated Treatment Effect on QL gateway Momentum", x = "" ) + 
   geom_vline(xintercept = 0) + 
-  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,1], linetype = "dashed") + 
-  geom_vline(xintercept = bus_ql_model_sum$quantiles[13,5], linetype = "dashed")
+  geom_vline(xintercept = bus_ql_model_sum$quantiles[14,1], linetype = "dashed") + 
+  geom_vline(xintercept = bus_ql_model_sum$quantiles[14,5], linetype = "dashed")
 
 # bus_ql_model_sum
 # bus_ql_mo # checked
@@ -1313,3 +1328,26 @@ gen_data %>% ggplot() +
 a degree works plan on file?
 - academic plan
 - success plan
+
+```{r}
+# Compared to non-GS first year students FALL 2018
+gen_data %>%
+  group_by(bs_deg) %>%
+  summarise(average_tc = mean(TERM_CREDITS),
+            n_dis = n_distinct(PIDM))
+```
+
+```{r}
+gen_data %>%
+  ggplot() + 
+  geom_density(aes(TERM_CREDITS, col = as.factor(bs_deg)))
+```
+
+```{r}
+# Compared to previous BUS students
+bus_data %>% 
+  group_by(TERM_CODE) %>% 
+  summarise(average_tc = mean(TERM_CREDITS),
+            n_dis = n_distinct(PIDM))
+```
+

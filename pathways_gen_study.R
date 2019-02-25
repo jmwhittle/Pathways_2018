@@ -1,7 +1,8 @@
 library(lme4)
 library(BMA)
 library(MCMCpack)
-library(readxl)
+#library(readxl)
+library(Matching)
 library(tidyverse); theme_set(theme_minimal())
 
 # old gen_data with Marie sql mistakes
@@ -213,9 +214,7 @@ for (k in 1:nrow(beta))
 }
 
 
-##### PASSING #######
-library(Matching)
-
+##### PASSING ######
 # STEP 4: match based on model from STEP 3
 
 # MatchBalance formula

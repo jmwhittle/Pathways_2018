@@ -20,6 +20,8 @@ bus_data$FALL_SPRING_RETENTION <- ifelse(bus_data$FALL_SPRING_RETENTION == "Y", 
 bus_data$FALL_SPRING_RETENTION[is.na(bus_data$FALL_SPRING_RETENTION) == T] <- 0
 bus_data$EVER_CONCURRENT_IND <- ifelse(bus_data$EVER_CONCURRENT_IND == "Y", 1, 0)
 
+bus_data$hs_gpa <- bus_data$HIGH_SCHOOL_GPA
+
 bus_data$HIGH_SCHOOL_GPA <- ifelse(bus_data$HIGH_SCHOOL_GPA > 3, "AB",
                                    ifelse(bus_data$HIGH_SCHOOL_GPA > 2, "BC", 
                                           ifelse(bus_data$HIGH_SCHOOL_GPA > 1, "CD", 
